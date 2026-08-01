@@ -37,3 +37,7 @@ replace `mappings_dir` with the reviewed canonical existing mappings directory.
 After import, select the SpaceMouse under `Controls`, open `Inversion Settings
 → Flight → Flight Movement`, and verify `Flight Strafe (Up/Down) = Yes`. The
 profile contains `invert=1`, but the visible setting should still be checked.
+
+See [Hardware and detection](hardware-and-detection.md) for the distinction
+between native detection, Wine visibility, binding verification, and the
+historical manual gameplay result.

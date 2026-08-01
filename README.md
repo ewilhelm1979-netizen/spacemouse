@@ -28,6 +28,28 @@ review, security decisions, testing, licensing, provenance, and releases.
 Bluetooth, Universal Receiver operation, and other product IDs remain
 unverified. Add another device only after confirming its exact VID:PID pair.
 
+## Hardware and detection
+
+The tested reference is a 3Dconnexion SpaceMouse Wireless BT connected over
+USB as `256f:c63a`. Linux exposes it as a six-axis, two-button controller, and
+it is visible through the Wine controller interface. Native detection, Wine
+visibility, binding verification, and gameplay verification are separate
+layers: success at one layer does not establish success at a later layer.
+
+![AI-assisted documentation image of the tested 3Dconnexion SpaceMouse Wireless BT](docs/images/spacemouse.png)
+
+![AI-assisted documentation rendering of Linux and Wine detecting the SpaceMouse as a six-axis, two-button controller](docs/images/setup.png)
+
+These visuals were prepared with AI assistance for documentation. They are
+illustrative and are not the raw private audit evidence.
+
+Successful Star Citizen gameplay was established by the separately documented
+manual test. The 2026-08 live read-only audit independently confirmed current
+USB-ancestor detection and effective HIDRAW read/write access without
+consuming device events. Bluetooth, Universal Receiver operation, other
+SpaceMouse models, other Linux distributions and Wine runners, and future Star
+Citizen builds remain unverified unless separately documented.
+
 ## Quick start
 
 ### NixOS
@@ -88,6 +110,7 @@ The profile imports as `spacemouse_linux_usb_v1`; see its
 
 - [NixOS](docs/nixos.md)
 - [Generic Linux](docs/generic-linux.md)
+- [Hardware and detection](docs/hardware-and-detection.md)
 - [Nix-Citizen](docs/nix-citizen.md)
 - [Star Citizen](docs/star-citizen.md)
 - [Security model](docs/security.md)

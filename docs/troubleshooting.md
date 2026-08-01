@@ -12,3 +12,7 @@
 Do not solve access failures with a world-writable HIDRAW rule. Multiple device
 instances, drift, or cross-axis input should be diagnosed before changing
 bindings.
+
+The [hardware and detection guide](hardware-and-detection.md) explains why
+runtime node numbers must not be hardcoded and why native detection alone does
+not establish Wine visibility, binding, or gameplay.

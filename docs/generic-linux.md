@@ -21,3 +21,6 @@ The remover preserves a timestamped copy before deleting the active rule.
 An approved scoped backup can be restored explicitly with
 `scripts/install-udev-rule --restore-backup ABSOLUTE-BACKUP --dry-run` and then
 the same command without `--dry-run` after review.
+
+See [Hardware and detection](hardware-and-detection.md) for the tested device,
+dynamic node-number guidance, Wine visibility, and live read-only audit scope.

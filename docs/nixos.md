@@ -15,3 +15,7 @@ receives the `uaccess` ACL. Verify with `spacemouse-verify-access`.
 
 Rollback: disable the option or remove the module import, rebuild NixOS, and
 reboot. No group or persistent ACL cleanup is needed.
+
+See [Hardware and detection](hardware-and-detection.md) for the tested USB
+identity, dynamic Linux node types, and the boundaries between native, Wine,
+and gameplay evidence.

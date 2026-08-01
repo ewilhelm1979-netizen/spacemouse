@@ -446,6 +446,67 @@ for doc in "$repo/README.md" "$repo/docs/star-citizen.md" "$repo/profiles/star-c
 		fail "absolute profile example missing: $doc"
 done
 
+image_dir=$repo/docs/images
+for image_name in setup.png spacemouse.png; do
+	image_path=$image_dir/$image_name
+	[[ -f $image_path && ! -L $image_path ]] || fail "documentation image is not a regular file: $image_name"
+	[[ $(stat -c '%h' "$image_path") -eq 1 ]] || fail "documentation image has multiple links: $image_name"
+	[[ $(od -An -tx1 -N8 "$image_path" | tr -d ' \n') == 89504e470d0a1a0a ]] ||
+		fail "invalid PNG signature: $image_name"
+done
+[[ -f $image_dir/README.md ]] || fail 'documentation image provenance is missing'
+[[ -f $repo/docs/hardware-and-detection.md ]] || fail 'hardware and detection guide is missing'
+(cd "$image_dir" && sha256sum --check SHA256SUMS >/dev/null) || fail 'documentation image checksums'
+rg -F '](docs/images/setup.png)' "$repo/README.md" >/dev/null || fail 'README setup image reference'
+rg -F '](docs/images/spacemouse.png)' "$repo/README.md" >/dev/null || fail 'README SpaceMouse image reference'
+rg -F '](images/setup.png)' "$repo/docs/hardware-and-detection.md" >/dev/null ||
+	fail 'hardware guide setup image reference'
+rg -F '](images/spacemouse.png)' "$repo/docs/hardware-and-detection.md" >/dev/null ||
+	fail 'hardware guide SpaceMouse image reference'
+rg -F 'illustrative and are not the raw private audit evidence' "$repo/README.md" >/dev/null ||
+	fail 'README image provenance wording'
+rg -F 'OpenAI tools substantially assisted with preparation' "$image_dir/README.md" >/dev/null ||
+	fail 'image provenance AI disclosure'
+rg -F 'The human maintainer' "$image_dir/README.md" >/dev/null ||
+	fail 'image provenance human responsibility'
+python3 - "$repo" <<'PY'
+import pathlib
+import re
+import sys
+from urllib.parse import unquote
+
+repo = pathlib.Path(sys.argv[1]).resolve()
+image_pattern = re.compile(r"!\[[^]]*\]\(([^)]+)\)")
+link_pattern = re.compile(r"(?<!!)\[[^]]+\]\(([^)]+)\)")
+external = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+for document in sorted(repo.rglob("*.md")):
+    text = document.read_text(encoding="utf-8")
+    for raw_target in image_pattern.findall(text):
+        target = raw_target.strip().split()[0].strip("<>")
+        lowered = target.lower()
+        if lowered.startswith(("/home/", "/mnt/", "file://")) or external.match(target):
+            raise SystemExit(f"unsafe or external image reference: {document}: {target}")
+        local = unquote(target.split("#", 1)[0].split("?", 1)[0])
+        resolved = (document.parent / local).resolve()
+        if not resolved.is_relative_to(repo) or not resolved.is_file():
+            raise SystemExit(f"unresolved local image reference: {document}: {target}")
+    for raw_target in link_pattern.findall(text):
+        target = raw_target.strip().split()[0].strip("<>")
+        if not target or target.startswith("#") or external.match(target):
+            continue
+        local = unquote(target.split("#", 1)[0].split("?", 1)[0])
+        if not local:
+            continue
+        resolved = (document.parent / local).resolve()
+        if not resolved.is_relative_to(repo) or not resolved.exists():
+            raise SystemExit(f"unresolved local Markdown link: {document}: {target}")
+PY
+expected_udev_hash=a9eb49c848097e9c540050afcd9057dd786741e49f955f899e0ef62a9a6ca879
+read -r actual_udev_hash _ < <(sha256sum "$repo/udev/60-spacemouse-hidraw.rules")
+[[ $actual_udev_hash == "$expected_udev_hash" ]] || fail 'scoped Udev rule checksum'
+pass 'documentation image integrity, provenance, links, and immutable policy'
+
 read_markdown_section() {
 	local file=$1
 	local heading=$2
