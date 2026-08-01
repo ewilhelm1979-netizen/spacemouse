@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: spacemouse-verify-access [--device /dev/hidrawN]
+                                [--vendor HEX --product HEX] [--dry-run]
+
+Verify current-user read/write access to an explicit or dynamically detected
+SpaceMouse HIDRAW node.
+
+Exit codes: 0 accessible, 2 invalid arguments, 3 not found, 4 dependency
+missing, 5 insufficient access.
+EOF
+}
+
+device=
+vendor=256f
+product=c63a
+dry_run=0
+
+while (($#)); do
+  case "$1" in
+    --device)
+      (($# >= 2)) || { printf 'Missing value for --device\n' >&2; exit 2; }
+      device=$2
+      shift 2
+      ;;
+    --vendor)
+      (($# >= 2)) || { printf 'Missing value for --vendor\n' >&2; exit 2; }
+      vendor=${2,,}
+      shift 2
+      ;;
+    --product)
+      (($# >= 2)) || { printf 'Missing value for --product\n' >&2; exit 2; }
+      product=${2,,}
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'Unknown argument: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+[[ $vendor =~ ^[0-9a-f]{4}$ && $product =~ ^[0-9a-f]{4}$ ]] || exit 2
+
+if ((dry_run)); then
+  if [[ -n $device ]]; then
+    printf 'DRY-RUN: would verify read/write access to %s\n' "$device"
+  else
+    printf 'DRY-RUN: would locate and verify HIDRAW access for %s:%s\n' "$vendor" "$product"
+  fi
+  exit 0
+fi
+
+if [[ -z $device ]]; then
+  command -v udevadm >/dev/null || { printf 'udevadm is required.\n' >&2; exit 4; }
+  shopt -s nullglob
+  devices=()
+  for candidate in /dev/hidraw*; do
+    properties=$(udevadm info --query=property --name "$candidate" 2>/dev/null || true)
+    grep -qx "ID_VENDOR_ID=$vendor" <<<"$properties" || continue
+    grep -qx "ID_MODEL_ID=$product" <<<"$properties" || continue
+    devices+=("$candidate")
+  done
+  ((${#devices[@]} == 1)) || {
+    printf 'Expected exactly one matching HIDRAW node, found %d.\n' "${#devices[@]}" >&2
+    exit 3
+  }
+  device=${devices[0]}
+fi
+
+[[ $device =~ ^/dev/hidraw[0-9]+$ && -c $device ]] || {
+  printf 'Not a valid HIDRAW character device: %s\n' "$device" >&2
+  exit 3
+}
+
+printf 'DEVICE=%s\n' "$device"
+stat -c 'MODE=%a OWNER=%U:%G' "$device"
+if command -v getfacl >/dev/null; then
+  getfacl -cp "$device"
+fi
+
+if [[ -r $device && -w $device ]]; then
+  printf 'CURRENT_USER_RW=YES\n'
+  exit 0
+fi
+
+printf 'CURRENT_USER_RW=NO\n' >&2
+exit 5

@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: spacemouse-detect [--vendor HEX] [--product HEX] [--dry-run]
+
+Find matching hidraw, event, and joystick nodes using udev properties.
+Defaults: --vendor 256f --product c63a
+
+Exit codes: 0 found, 2 invalid arguments, 3 not found, 4 dependency missing.
+EOF
+}
+
+vendor=256f
+product=c63a
+dry_run=0
+
+while (($#)); do
+  case "$1" in
+    --vendor)
+      (($# >= 2)) || { printf 'Missing value for --vendor\n' >&2; exit 2; }
+      vendor=${2,,}
+      shift 2
+      ;;
+    --product)
+      (($# >= 2)) || { printf 'Missing value for --product\n' >&2; exit 2; }
+      product=${2,,}
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'Unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+[[ $vendor =~ ^[0-9a-f]{4}$ && $product =~ ^[0-9a-f]{4}$ ]] || {
+  printf 'Vendor and product must be lowercase four-digit hexadecimal IDs.\n' >&2
+  exit 2
+}
+
+if ((dry_run)); then
+  printf 'DRY-RUN: would inspect /dev/hidraw* and /dev/input/{event*,js*} for %s:%s\n' "$vendor" "$product"
+  exit 0
+fi
+
+command -v udevadm >/dev/null || { printf 'udevadm is required.\n' >&2; exit 4; }
+shopt -s nullglob
+
+matches=0
+hidraw_matches=0
+for node in /dev/hidraw* /dev/input/event* /dev/input/js*; do
+  properties=$(udevadm info --query=property --name "$node" 2>/dev/null || true)
+  grep -qx "ID_VENDOR_ID=$vendor" <<<"$properties" || continue
+  grep -qx "ID_MODEL_ID=$product" <<<"$properties" || continue
+
+  ((matches += 1))
+  [[ $node == /dev/hidraw* ]] && ((hidraw_matches += 1))
+  printf 'NODE=%s\n' "$node"
+  stat -c 'MODE=%a OWNER=%U:%G' "$node"
+  grep -E '^(ID_BUS|ID_VENDOR|ID_MODEL|ID_VENDOR_ID|ID_MODEL_ID|ID_PATH|TAGS|CURRENT_TAGS)=' <<<"$properties" || true
+done
+
+printf 'MATCHING_NODES=%d\n' "$matches"
+printf 'MATCHING_HIDRAW_NODES=%d\n' "$hidraw_matches"
+((hidraw_matches > 0)) || exit 3
