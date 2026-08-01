@@ -16,9 +16,9 @@ and failure injection. It did not install or reload a real Udev rule, consume
 device events, change an ACL, change group membership, start Wine or a game, or
 modify a game file.
 
-Live read-only testing remains gated on explicit confirmation that the tested
-USB SpaceMouse is connected and the game and launcher are closed. No live
-result is claimed in this report yet.
+Live read-only testing was completed after explicit confirmation that the
+tested USB SpaceMouse was connected and the game and launcher were closed. No
+device event or raw report was consumed.
 
 ## Methodology
 
@@ -30,13 +30,30 @@ module, and manually reviewed scanner output. A private cross-project contract
 test compares the SpaceMouse policy with Citizen Input Manager without creating
 a runtime dependency.
 
+## Live read-only hardware validation
+
+On 2026-08-01, repository commit
+`8f1fa0654f3110452993a367c734b4ef2d6a835b` was tested read-only with one
+connected USB SpaceMouse. VID:PID `256f:c63a` was confirmed through its
+canonical USB ancestor. HIDRAW, event, and joystick node types were associated
+dynamically, with no ambiguous HIDRAW match. Effective HIDRAW read and write
+access both succeeded for the active desktop user.
+
+The active rule was byte-identical to the repository's scoped HIDRAW
+`TAG+="uaccess"` policy and contained no `MODE`, `GROUP`, `OWNER`, executable,
+global HIDRAW, or input-subsystem permission directive. No device event,
+joystick event, or raw HID report was consumed. No system configuration, Udev
+rule, ACL, group, Wine state, Star Citizen file, or game state was changed.
+Gameplay was not retested during this phase; the earlier gameplay reference
+remains historical manual evidence only.
+
 ## Functional claim matrix
 
 | Claim | Documentation | Implementation | Evidence | Result | Remaining limitation |
 | --- | --- | --- | --- | --- | --- |
-| Discovery identifies `256f:c63a` through a canonical USB ancestor rather than leaf identity properties. | `README.md`, `docs/security.md` | `scripts/spacemouse-detect`, `scripts/lib/spacemouse-device.sh` | Synthetic ancestor-only, wrong-ID, missing-attribute, escaping-link, stale-node, and depth-limit fixtures | PARTIALLY_VERIFIED | Live USB discovery is pending. |
+| Discovery identifies `256f:c63a` through a canonical USB ancestor rather than leaf identity properties. | `README.md`, `docs/security.md` | `scripts/spacemouse-detect`, `scripts/lib/spacemouse-device.sh` | Synthetic ancestor-only, wrong-ID, missing-attribute, escaping-link, stale-node, and depth-limit fixtures plus live USB-ancestor validation | VERIFIED | The USB reference path was tested; Bluetooth and Universal Receiver remain unverified. |
 | Node numbers are dynamic and HIDRAW ambiguity fails closed for access verification. | `docs/troubleshooting.md` | discovery and verification scripts | Nonzero node numbers, multiple HIDRAW nodes, zero matches, and wrong IDs | VERIFIED | Multiple nodes from one physical USB device remain deliberately ambiguous for the access command. |
-| Access output reports mode, owner, group, ACL, and effective read and write separately. | CLI help and `docs/generic-linux.md` | `scripts/spacemouse-verify-access` | Read/write and read-only fixture modes with ACL output | PARTIALLY_VERIFIED | Current live-session access is pending. |
+| Access output reports mode, owner, group, ACL, and effective read and write separately. | CLI help and `docs/generic-linux.md` | `scripts/spacemouse-verify-access` | Read/write and read-only fixture modes plus live mode, ownership, ACL, and effective access validation | VERIFIED | Access is a point-in-time session result and can change after verification. |
 | The Udev policy is only HIDRAW `256f:c63a` with `TAG+="uaccess"`. | README and security documentation | rule file, installer, NixOS module | Exact byte comparison, forbidden-directive scan, and `udevadm verify` | VERIFIED | No real rule was installed or reloaded. |
 | Udev publication is transactional and recoverable. | `docs/generic-linux.md` | install/remove scripts and secure-file helpers | Empty/replacement/repeat/remove/restore flows; links, special files, canonical roots; all failpoints; INT/TERM/HUP; rollback-failure recovery | VERIFIED | A hostile mount namespace is outside the shell tool's trust model. |
 | The exported profile is the documented immutable delta. | profile README and Star Citizen guide | exported XML and profile scripts | Required SHA-256, `SHA256SUMS`, XML parse, exact eight-entry delta, name consistency, inversion, and forbidden-rebind scan | VERIFIED | Gameplay and import behavior were not repeated because live events/game startup are out of scope. |
@@ -207,24 +224,25 @@ The profile hash remains
 The added workflow has minimal permissions, no `pull_request_target`, no
 self-hosted runner, no artifact upload, no mutable download, no untrusted
 context in shell, and disables checkout credential persistence. The pinned
-`actions/checkout` SHA corresponds to upstream tag `v4.3.0`; the pinned
+`actions/checkout` SHA corresponds to upstream tag `v5.1.0`; the pinned
 `cachix/install-nix-action` SHA corresponds to upstream tag `v31`. Actionlint
 and offline pedantic zizmor report no finding. CI runs the same core
 `nix flake check --no-write-lock-file` matrix used locally.
 
 ## Unverified boundaries and readiness
 
-- Live USB discovery and live effective access are pending the required user
-  gate.
+- Live USB discovery and effective HIDRAW read/write access passed for the
+  tested reference device.
 - No device event was read; six-axis/gameplay behavior was not retested.
 - Bluetooth and Universal Receiver operation remain unverified.
 - No Wine runner, launcher, game build, generic Linux distribution, or
   `aarch64-linux` machine was exercised.
-- GitHub CI and automated pull-request review are pending publication.
+- Pre-live follow-up CI passed. CI for this live-documentation commit and
+  automated pull-request review remain pending.
 
 Current state: `SPACEMOUSE_AUDIT_READY=NO`. The reasons are the pending live
-read-only check and pending GitHub CI/review, not an unresolved
-CRITICAL/HIGH/MEDIUM code finding.
+documentation CI/review, not an unresolved CRITICAL/HIGH/MEDIUM code finding or
+a failed live check.
 
 ## AI-assisted audit
 
