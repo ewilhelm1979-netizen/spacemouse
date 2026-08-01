@@ -11,6 +11,11 @@ device. USB is the only confirmed transport.
 *AI-assisted illustrative documentation image; not raw private audit
 evidence.*
 
+The documented reference environment used NixOS 26.05 with
+[nix-citizen](https://github.com/LovingMelody/nix-citizen) and the
+`wine-astral` 11.12 package supplied through that project. The implementation
+in this repository remains an independent, SpaceMouse-specific integration.
+
 ## Native Linux detection
 
 The Linux kernel and input stack associate the hardware with HIDRAW, event,

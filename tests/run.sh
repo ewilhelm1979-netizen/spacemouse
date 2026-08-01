@@ -502,6 +502,49 @@ for document in sorted(repo.rglob("*.md")):
         if not resolved.is_relative_to(repo) or not resolved.exists():
             raise SystemExit(f"unresolved local Markdown link: {document}: {target}")
 PY
+
+lug_helper_url=https://github.com/starcitizen-lug/lug-helper
+nix_citizen_url=https://github.com/LovingMelody/nix-citizen
+rg -F "$lug_helper_url" "$repo/README.md" >/dev/null || fail 'README LUG Helper attribution'
+rg -F "$nix_citizen_url" "$repo/README.md" >/dev/null || fail 'README nix-citizen attribution'
+rg -F '`wine-astral`' "$repo/README.md" >/dev/null || fail 'README wine-astral attribution'
+for upstream_url in "$lug_helper_url" "$nix_citizen_url"; do
+	rg -F "$upstream_url" "$repo/docs/nix-citizen.md" >/dev/null ||
+		fail "nix-citizen guide missing upstream attribution: $upstream_url"
+done
+rg -F 'maintained independently' "$repo/README.md" >/dev/null || fail 'README independence statement'
+rg -F 'no affiliation or endorsement' "$repo/README.md" >/dev/null ||
+	fail 'README no-affiliation and no-endorsement statement'
+rg -F '[LUG Helper](https://github.com/starcitizen-lug/lug-helper) is the official' \
+	"$repo/README.md" >/dev/null || fail 'accurate LUG Helper official-installer role'
+rg -F 'installer maintained by the Star Citizen Linux Users Group and community' \
+	"$repo/README.md" >/dev/null || fail 'accurate LUG Helper maintainer attribution'
+if rg -n -i \
+	'official SpaceMouse integration|endorsed by (the )?LUG|endorsed by LovingMelody|supported by nix-citizen|developed together with (the )?(LUG|LovingMelody)|part of LUG Helper|included in nix-citizen' \
+	"$repo/README.md" "$repo/docs" >/dev/null; then
+	fail 'forbidden upstream relationship claim'
+fi
+if rg -n -i \
+	'official[^[:cntrl:]]*(SpaceMouse|this (project|repository))|(SpaceMouse|this (project|repository))[^[:cntrl:]]*official' \
+	"$repo/README.md" "$repo/docs" >/dev/null; then
+	fail 'official wording describes the SpaceMouse repository'
+fi
+if rg -n \
+	'http://github\.com/(starcitizen-lug/lug-helper|LovingMelody/nix-citizen)|\]\(//github\.com/(starcitizen-lug/lug-helper|LovingMelody/nix-citizen)' \
+	"$repo/README.md" "$repo/docs" >/dev/null; then
+	fail 'non-HTTPS upstream project link'
+fi
+if rg -n -i 'starcitizen-lug|LovingMelody|wine-astral' \
+	"$repo/flake.nix" "$repo/flake.lock" "$repo/modules" >/dev/null; then
+	fail 'upstream project added as a Nix dependency'
+fi
+if rg -n -i \
+	'!\[[^]]*\]\(https://github\.com/(starcitizen-lug|LovingMelody)' \
+	"$repo/README.md" "$repo/docs" >/dev/null; then
+	fail 'upstream project image or artwork reference'
+fi
+pass 'ecosystem attribution, HTTPS links, independence, and no-endorsement policy'
+
 expected_udev_hash=a9eb49c848097e9c540050afcd9057dd786741e49f955f899e0ef62a9a6ca879
 read -r actual_udev_hash _ < <(sha256sum "$repo/udev/60-spacemouse-hidraw.rules")
 [[ $actual_udev_hash == "$expected_udev_hash" ]] || fail 'scoped Udev rule checksum'

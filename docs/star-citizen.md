@@ -41,3 +41,12 @@ profile contains `invert=1`, but the visible setting should still be checked.
 See [Hardware and detection](hardware-and-detection.md) for the distinction
 between native detection, Wine visibility, binding verification, and the
 historical manual gameplay result.
+
+## Broader installation and troubleshooting
+
+[LUG Helper](https://github.com/starcitizen-lug/lug-helper) covers broader
+Star Citizen installation, Wine-runner management, system preparation,
+maintenance, and general troubleshooting. This repository instead focuses on
+the SpaceMouse-specific access, verification, and controller-profile path.
+Consult LUG Helper and its community documentation for those broader
+workflows; the projects are complementary and maintained independently.

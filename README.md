@@ -28,6 +28,25 @@ review, security decisions, testing, licensing, provenance, and releases.
 Bluetooth, Universal Receiver operation, and other product IDs remain
 unverified. Add another device only after confirming its exact VID:PID pair.
 
+## Related Star Citizen Linux projects
+
+The documented reference environment was tested on NixOS with
+[nix-citizen](https://github.com/LovingMelody/nix-citizen) and the
+`wine-astral` package supplied through that project.
+
+[LUG Helper](https://github.com/starcitizen-lug/lug-helper) is the official
+installer maintained by the Star Citizen Linux Users Group and community. It
+covers broader installation, Wine-runner management, system preparation,
+maintenance, and general troubleshooting workflows.
+
+This repository complements that ecosystem with a narrowly scoped SpaceMouse
+implementation: device-specific HIDRAW access, Linux and NixOS diagnostics,
+and the tested Star Citizen controller profile.
+
+These references are provided for attribution and technical context. This
+repository is maintained independently; no affiliation or endorsement by the
+LUG Helper or nix-citizen maintainers is implied.
+
 ## Hardware and detection
 
 The tested reference is a 3Dconnexion SpaceMouse Wireless BT connected over
