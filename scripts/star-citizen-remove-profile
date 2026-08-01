@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: star-citizen-remove-profile --profile FILE [--dry-run]
    or: star-citizen-remove-profile --mappings-dir DIR --name FILE.xml
                                        [--dry-run]
@@ -21,57 +21,69 @@ name=
 dry_run=0
 
 while (($#)); do
-  case "$1" in
-    --profile)
-      (($# >= 2)) || exit 2
-      profile=$2
-      shift 2
-      ;;
-    --mappings-dir)
-      (($# >= 2)) || exit 2
-      mappings_dir=$2
-      shift 2
-      ;;
-    --name)
-      (($# >= 2)) || exit 2
-      name=$2
-      shift 2
-      ;;
-    --dry-run)
-      dry_run=1
-      shift
-      ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    *)
-      printf 'Unknown argument: %s\n' "$1" >&2
-      exit 2
-      ;;
-  esac
+	case "$1" in
+	--profile)
+		(($# >= 2)) || exit 2
+		profile=$2
+		shift 2
+		;;
+	--mappings-dir)
+		(($# >= 2)) || exit 2
+		mappings_dir=$2
+		shift 2
+		;;
+	--name)
+		(($# >= 2)) || exit 2
+		name=$2
+		shift 2
+		;;
+	--dry-run)
+		dry_run=1
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'Unknown argument: %s\n' "$1" >&2
+		exit 2
+		;;
+	esac
 done
 
 if [[ -z $profile ]]; then
-  [[ -n $mappings_dir && -n $name ]] || { usage >&2; exit 2; }
-  [[ $mappings_dir == /* && -d $mappings_dir && ! -L $mappings_dir ]] || exit 3
-  [[ $name =~ ^layout_[A-Za-z0-9._-]+\.xml$ ]] || exit 2
-  profile=$mappings_dir/$name
+	[[ -n $mappings_dir && -n $name ]] || {
+		usage >&2
+		exit 2
+	}
+	[[ $mappings_dir == /* && -d $mappings_dir && ! -L $mappings_dir ]] || exit 3
+	[[ $name =~ ^layout_[A-Za-z0-9._-]+\.xml$ ]] || exit 2
+	profile=$mappings_dir/$name
 fi
 
-[[ $profile == /* && ! -L $profile ]] || { printf 'Unsafe profile path.\n' >&2; exit 3; }
+[[ $profile == /* && ! -L $profile ]] || {
+	printf 'Unsafe profile path.\n' >&2
+	exit 3
+}
 if [[ ! -e $profile ]]; then
-  printf 'Profile is not installed: %s\n' "$profile"
-  exit 0
+	printf 'Profile is not installed: %s\n' "$profile"
+	exit 0
 fi
-[[ -f $profile ]] || { printf 'Target is not a regular file.\n' >&2; exit 3; }
+[[ -f $profile ]] || {
+	printf 'Target is not a regular file.\n' >&2
+	exit 3
+}
 canonical_profile=$(realpath -- "$profile")
-[[ $canonical_profile == "$profile" ]] || { printf 'Profile path must be canonical and contain no symlink traversal.\n' >&2; exit 3; }
+[[ $canonical_profile == "$profile" ]] || {
+	printf 'Profile path must be canonical and contain no symlink traversal.\n' >&2
+	exit 3
+}
 profile=$canonical_profile
 
 if ((dry_run)); then
-  printf 'DRY-RUN: would back up and remove %s\n' "$profile"
-  exit 0
+	printf 'DRY-RUN: would back up and remove %s\n' "$profile"
+	exit 0
 fi
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)

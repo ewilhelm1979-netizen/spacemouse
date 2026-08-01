@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: install-udev-rule [--root DIR] [--rule-file FILE]
                          [--dry-run] [--no-reload]
 
@@ -14,7 +14,7 @@ Exit codes: 0 success, 2 invalid arguments, 3 unsafe path, 4 invalid rule,
 EOF
 }
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 root=/
 rule_file=$script_dir/../udev/60-spacemouse-hidraw.rules
 dry_run=0
@@ -22,72 +22,93 @@ reload=1
 expected='SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="256f", ATTRS{idProduct}=="c63a", TAG+="uaccess"'
 
 while (($#)); do
-  case "$1" in
-    --root)
-      (($# >= 2)) || exit 2
-      root=$2
-      shift 2
-      ;;
-    --rule-file)
-      (($# >= 2)) || exit 2
-      rule_file=$2
-      shift 2
-      ;;
-    --dry-run)
-      dry_run=1
-      shift
-      ;;
-    --no-reload)
-      reload=0
-      shift
-      ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    *)
-      printf 'Unknown argument: %s\n' "$1" >&2
-      exit 2
-      ;;
-  esac
+	case "$1" in
+	--root)
+		(($# >= 2)) || exit 2
+		root=$2
+		shift 2
+		;;
+	--rule-file)
+		(($# >= 2)) || exit 2
+		rule_file=$2
+		shift 2
+		;;
+	--dry-run)
+		dry_run=1
+		shift
+		;;
+	--no-reload)
+		reload=0
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'Unknown argument: %s\n' "$1" >&2
+		exit 2
+		;;
+	esac
 done
 
-[[ $root == /* && -d $root && ! -L $root ]] || { printf 'Unsafe root: %s\n' "$root" >&2; exit 3; }
+[[ $root == /* && -d $root && ! -L $root ]] || {
+	printf 'Unsafe root: %s\n' "$root" >&2
+	exit 3
+}
 canonical_root=$(realpath -- "$root")
-[[ $canonical_root == "$root" ]] || { printf 'Root must be canonical and contain no symlink traversal: %s\n' "$root" >&2; exit 3; }
+[[ $canonical_root == "$root" ]] || {
+	printf 'Root must be canonical and contain no symlink traversal: %s\n' "$root" >&2
+	exit 3
+}
 root=$canonical_root
-[[ -f $rule_file && ! -L $rule_file ]] || { printf 'Rule must be a regular non-symlink file.\n' >&2; exit 4; }
+[[ -f $rule_file && ! -L $rule_file ]] || {
+	printf 'Rule must be a regular non-symlink file.\n' >&2
+	exit 4
+}
 rule_file=$(realpath -- "$rule_file")
-[[ $(<"$rule_file") == "$expected" ]] || { printf 'Rule content is not the approved scoped rule.\n' >&2; exit 4; }
+[[ $(<"$rule_file") == "$expected" ]] || {
+	printf 'Rule content is not the approved scoped rule.\n' >&2
+	exit 4
+}
 
 if [[ $root == / ]]; then
-  etc_dir=/etc
+	etc_dir=/etc
 else
-  etc_dir=$root/etc
+	etc_dir=$root/etc
 fi
 rules_dir=$etc_dir/udev/rules.d
 target=$rules_dir/60-spacemouse-hidraw.rules
 
 for path in "$etc_dir" "$etc_dir/udev" "$rules_dir" "$target"; do
-  [[ ! -L $path ]] || { printf 'Refusing symlink path: %s\n' "$path" >&2; exit 3; }
+	[[ ! -L $path ]] || {
+		printf 'Refusing symlink path: %s\n' "$path" >&2
+		exit 3
+	}
 done
-[[ ! -e $target || -f $target ]] || { printf 'Target is not a regular file.\n' >&2; exit 3; }
+[[ ! -e $target || -f $target ]] || {
+	printf 'Target is not a regular file.\n' >&2
+	exit 3
+}
 
 if ((dry_run)); then
-  printf 'DRY-RUN: would install %s atomically as %s\n' "$rule_file" "$target"
-  [[ -e $target ]] && printf 'DRY-RUN: would back up the existing rule first\n'
-  exit 0
+	printf 'DRY-RUN: would install %s atomically as %s\n' "$rule_file" "$target"
+	[[ -e $target ]] && printf 'DRY-RUN: would back up the existing rule first\n'
+	exit 0
 fi
 
-[[ $root != / || $EUID -eq 0 ]] || { printf 'Real-system installation requires root.\n' >&2; exit 5; }
+[[ $root != / || $EUID -eq 0 ]] || {
+	printf 'Real-system installation requires root.\n' >&2
+	exit 5
+}
 install -d -m 0755 "$rules_dir"
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup=
 if [[ -e $target ]]; then
-  backup=$(mktemp "$target.backup.$timestamp.XXXXXX")
-  cp -p -- "$target" "$backup"
-  printf 'Backup created: %s\n' "$backup"
+	backup=$(mktemp "$target.backup.$timestamp.XXXXXX")
+	cp -p -- "$target" "$backup"
+	printf 'Backup created: %s\n' "$backup"
 fi
 
 temp=$(mktemp "$rules_dir/.60-spacemouse-hidraw.rules.tmp.XXXXXX")
@@ -97,15 +118,15 @@ mv -f -- "$temp" "$target"
 temp=
 
 if ((reload)) && [[ $root == / ]]; then
-  if ! udevadm control --reload-rules; then
-    if [[ -n $backup ]]; then
-      mv -f -- "$backup" "$target"
-    else
-      rm -f -- "$target"
-    fi
-    printf 'udev reload failed; installation rolled back.\n' >&2
-    exit 6
-  fi
+	if ! udevadm control --reload-rules; then
+		if [[ -n $backup ]]; then
+			mv -f -- "$backup" "$target"
+		else
+			rm -f -- "$target"
+		fi
+		printf 'udev reload failed; installation rolled back.\n' >&2
+		exit 6
+	fi
 fi
 
 printf 'Installed: %s\n' "$target"

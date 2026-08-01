@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: remove-udev-rule [--root DIR] [--dry-run] [--no-reload]
 
 Back up and remove the scoped SpaceMouse udev rule.
@@ -17,70 +17,85 @@ dry_run=0
 reload=1
 
 while (($#)); do
-  case "$1" in
-    --root)
-      (($# >= 2)) || exit 2
-      root=$2
-      shift 2
-      ;;
-    --dry-run)
-      dry_run=1
-      shift
-      ;;
-    --no-reload)
-      reload=0
-      shift
-      ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    *)
-      printf 'Unknown argument: %s\n' "$1" >&2
-      exit 2
-      ;;
-  esac
+	case "$1" in
+	--root)
+		(($# >= 2)) || exit 2
+		root=$2
+		shift 2
+		;;
+	--dry-run)
+		dry_run=1
+		shift
+		;;
+	--no-reload)
+		reload=0
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'Unknown argument: %s\n' "$1" >&2
+		exit 2
+		;;
+	esac
 done
 
-[[ $root == /* && -d $root && ! -L $root ]] || { printf 'Unsafe root: %s\n' "$root" >&2; exit 3; }
+[[ $root == /* && -d $root && ! -L $root ]] || {
+	printf 'Unsafe root: %s\n' "$root" >&2
+	exit 3
+}
 canonical_root=$(realpath -- "$root")
-[[ $canonical_root == "$root" ]] || { printf 'Root must be canonical and contain no symlink traversal: %s\n' "$root" >&2; exit 3; }
+[[ $canonical_root == "$root" ]] || {
+	printf 'Root must be canonical and contain no symlink traversal: %s\n' "$root" >&2
+	exit 3
+}
 root=$canonical_root
 if [[ $root == / ]]; then
-  etc_dir=/etc
+	etc_dir=/etc
 else
-  etc_dir=$root/etc
+	etc_dir=$root/etc
 fi
 rules_dir=$etc_dir/udev/rules.d
 target=$rules_dir/60-spacemouse-hidraw.rules
 
 for path in "$etc_dir" "$etc_dir/udev" "$rules_dir" "$target"; do
-  [[ ! -L $path ]] || { printf 'Refusing symlink path: %s\n' "$path" >&2; exit 3; }
+	[[ ! -L $path ]] || {
+		printf 'Refusing symlink path: %s\n' "$path" >&2
+		exit 3
+	}
 done
 
 if [[ ! -e $target ]]; then
-  printf 'Rule is not installed: %s\n' "$target"
-  exit 0
+	printf 'Rule is not installed: %s\n' "$target"
+	exit 0
 fi
-[[ -f $target ]] || { printf 'Target is not a regular file.\n' >&2; exit 3; }
+[[ -f $target ]] || {
+	printf 'Target is not a regular file.\n' >&2
+	exit 3
+}
 
 if ((dry_run)); then
-  printf 'DRY-RUN: would back up and remove %s\n' "$target"
-  exit 0
+	printf 'DRY-RUN: would back up and remove %s\n' "$target"
+	exit 0
 fi
 
-[[ $root != / || $EUID -eq 0 ]] || { printf 'Real-system removal requires root.\n' >&2; exit 5; }
+[[ $root != / || $EUID -eq 0 ]] || {
+	printf 'Real-system removal requires root.\n' >&2
+	exit 5
+}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup=$(mktemp "$target.removed.$timestamp.XXXXXX")
 cp -p -- "$target" "$backup"
 rm -- "$target"
 
 if ((reload)) && [[ $root == / ]]; then
-  if ! udevadm control --reload-rules; then
-    mv -f -- "$backup" "$target"
-    printf 'udev reload failed; removal rolled back.\n' >&2
-    exit 6
-  fi
+	if ! udevadm control --reload-rules; then
+		mv -f -- "$backup" "$target"
+		printf 'udev reload failed; removal rolled back.\n' >&2
+		exit 6
+	fi
 fi
 
 printf 'Removed: %s\n' "$target"

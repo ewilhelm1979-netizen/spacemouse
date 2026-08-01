@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-repo=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+repo=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 
 pass() {
-  printf 'PASS: %s\n' "$1"
+	printf 'PASS: %s\n' "$1"
 }
 
 fail() {
-  printf 'FAIL: %s\n' "$1" >&2
-  exit 1
+	printf 'FAIL: %s\n' "$1" >&2
+	exit 1
 }
 
 expect_failure() {
-  if "$@" >/dev/null 2>&1; then
-    fail "command unexpectedly succeeded: $*"
-  fi
+	if "$@" >/dev/null 2>&1; then
+		fail "command unexpectedly succeeded: $*"
+	fi
 }
 
 expected_rule='SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="256f", ATTRS{idProduct}=="c63a", TAG+="uaccess"'
@@ -25,8 +25,8 @@ expected_rule='SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="256f", 
 pass 'scoped udev rule is exact'
 
 for script in "$repo"/scripts/*; do
-  [[ -x $script ]] || fail "not executable: $script"
-  "$script" --help >/dev/null
+	[[ -x $script ]] || fail "not executable: $script"
+	"$script" --help >/dev/null
 done
 "$repo/scripts/spacemouse-detect" --dry-run >/dev/null
 "$repo/scripts/spacemouse-verify-access" --dry-run >/dev/null
@@ -58,7 +58,7 @@ pass 'udev symlink defenses'
 
 xml_validator=${SPACEMOUSE_XMLLINT:-}
 if [[ -z $xml_validator ]]; then
-  xml_validator=$(command -v xmllint || true)
+	xml_validator=$(command -v xmllint || true)
 fi
 [[ -x $xml_validator ]] || fail 'xmllint is required for profile tests'
 export SPACEMOUSE_XMLLINT=$xml_validator
@@ -93,38 +93,48 @@ grep -q '^MAPPINGS_DIR=' <<<"$finder_output" || fail 'bounded mappings finder'
 pass 'bounded installation finder'
 
 if command -v shellcheck >/dev/null; then
-  shellcheck "$repo"/scripts/* "$repo/tests/run.sh"
-  pass 'shellcheck'
+	shellcheck "$repo"/scripts/* "$repo/tests/run.sh"
+	pass 'shellcheck'
 else
-  printf 'SKIP: shellcheck not installed\n'
+	printf 'SKIP: shellcheck not installed\n'
 fi
 
 if command -v shfmt >/dev/null; then
-  shfmt -d "$repo"/scripts/* "$repo/tests/run.sh"
-  pass 'shfmt check'
+	shfmt -d "$repo"/scripts/* "$repo/tests/run.sh"
+	pass 'shfmt check'
 else
-  printf 'SKIP: shfmt not installed\n'
+	printf 'SKIP: shfmt not installed\n'
 fi
 
 if command -v nix-instantiate >/dev/null; then
-  nix-instantiate --parse "$repo/modules/nixos/spacemouse.nix" >/dev/null
-  pass 'Nix syntax'
+	nix-instantiate --parse "$repo/modules/nixos/spacemouse.nix" >/dev/null
+	pass 'Nix syntax'
 fi
 
 if rg -l --hidden -g '!.git/**' -i '[h]y3|[h]y_v3|[h]unyuan' "$repo" | grep -q .; then
-  fail 'forbidden retired-model source found'
+	fail 'forbidden retired-model source found'
 fi
 private_user='enrico''w79'
 private_path_pattern="/home/$private_user|/home/[^/]+/Games/[^[:space:]]*/StarCitizen"
 if rg -l --hidden -g '!.git/**' "$private_path_pattern" "$repo" | grep -q .; then
-  fail 'private path found'
+	fail 'private path found'
 fi
-if find "$repo/profiles" -type f -name '*.xml' -print -quit | grep -q .; then
-  fail 'untested public profile found'
-fi
+expected_profile_name=layout_spacemouse_linux_usb_v1_exported.xml
+expected_profile="$repo/profiles/star-citizen/$expected_profile_name"
+expected_profile_hash=f76f84c085702a0aca2a0ae174f9ac2fc8d4221dbf2f6d051e9bd4820ec4c5db
+mapfile -d '' public_profiles < <(find "$repo/profiles" -type f -name '*.xml' -print0)
+[[ ${#public_profiles[@]} -eq 1 ]] || fail 'unexpected number of public profiles'
+[[ ${public_profiles[0]} == "$expected_profile" ]] || fail 'unexpected public profile'
+read -r actual_profile_hash _ < <(sha256sum "$expected_profile")
+[[ $actual_profile_hash == "$expected_profile_hash" ]] || fail 'public profile checksum'
+[[ $(<"$repo/profiles/star-citizen/SHA256SUMS") == "$expected_profile_hash  $expected_profile_name" ]] || fail 'SHA256SUMS content'
+(cd "$repo/profiles/star-citizen" && sha256sum -c SHA256SUMS >/dev/null) || fail 'SHA256SUMS verification'
+"$xml_validator" --noout "$expected_profile"
+[[ $("$xml_validator" --xpath 'string(/ActionMaps/@profileName)' "$expected_profile") == spacemouse_linux_usb_v1 ]] || fail 'public profile name'
+[[ $("$xml_validator" --xpath 'string(/ActionMaps/CustomisationUIHeader/@label)' "$expected_profile") == spacemouse_linux_usb_v1 ]] || fail 'public profile label'
 if rg -l 'MODE="0666"|setfacl|GROUP=' "$repo/udev" "$repo/modules" "$repo/scripts" | grep -q .; then
-  fail 'unsafe permission mechanism found'
+	fail 'unsafe permission mechanism found'
 fi
-pass 'privacy, profile, retired-model, and unsafe-permission scans'
+pass 'privacy, tested-profile, retired-model, and unsafe-permission scans'
 
 printf 'ALL_TESTS_PASSED=YES\n'

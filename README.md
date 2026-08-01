@@ -1,8 +1,8 @@
 # Universal Linux and NixOS SpaceMouse support
 
-> **Work in progress:** Linux/NixOS HIDRAW access is implemented and tested for
-> USB `256f:c63a`. The sanitized Star Citizen profile is intentionally withheld
-> until its final manual import test is complete.
+Linux/NixOS HIDRAW access and the included Star Citizen v1 profile were
+manually tested with the USB device `256f:c63a` in the reference environment
+documented below.
 
 This project provides a small, auditable integration for using a 3Dconnexion
 SpaceMouse with Star Citizen on Linux. It does not require `spacenavd`,
@@ -52,18 +52,19 @@ sudo ./scripts/install-udev-rule --dry-run
 sudo ./scripts/install-udev-rule
 ```
 
-Installing a future tested profile always requires explicit source and target
-paths:
+Installing the tested profile always requires explicit source and target paths:
 
 ```console
 ./scripts/star-citizen-find-installation
 ./scripts/star-citizen-install-profile \
-  --profile /path/to/tested-layout.xml \
+  --profile profiles/star-citizen/layout_spacemouse_linux_usb_v1_exported.xml \
   --mappings-dir /explicit/path/to/controls/mappings \
   --dry-run
 ```
 
-No profile XML is included in this branch. See [the tracking issue](https://github.com/ewilhelm1979-netizen/spacemouse/issues/1).
+Repeat the installation command without `--dry-run` after verifying both
+paths. The profile imports as `spacemouse_linux_usb_v1`; see its
+[validation and inversion notes](profiles/star-citizen/README.md).
 
 ## Documentation
 

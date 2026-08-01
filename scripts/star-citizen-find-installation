@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: star-citizen-find-installation [--prefix DIR] [--game-root DIR]
                                       [--dry-run]
 
@@ -18,76 +18,79 @@ game_roots=()
 dry_run=0
 
 while (($#)); do
-  case "$1" in
-    --prefix)
-      (($# >= 2)) || exit 2
-      prefixes+=("$2")
-      shift 2
-      ;;
-    --game-root)
-      (($# >= 2)) || exit 2
-      game_roots+=("$2")
-      shift 2
-      ;;
-    --dry-run)
-      dry_run=1
-      shift
-      ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    *)
-      printf 'Unknown argument: %s\n' "$1" >&2
-      exit 2
-      ;;
-  esac
+	case "$1" in
+	--prefix)
+		(($# >= 2)) || exit 2
+		prefixes+=("$2")
+		shift 2
+		;;
+	--game-root)
+		(($# >= 2)) || exit 2
+		game_roots+=("$2")
+		shift 2
+		;;
+	--dry-run)
+		dry_run=1
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'Unknown argument: %s\n' "$1" >&2
+		exit 2
+		;;
+	esac
 done
 
 if ((${#prefixes[@]} == 0 && ${#game_roots[@]} == 0)); then
-  [[ -n ${WINEPREFIX:-} ]] && prefixes+=("$WINEPREFIX")
-  [[ -n ${STEAM_COMPAT_DATA_PATH:-} ]] && prefixes+=("$STEAM_COMPAT_DATA_PATH/pfx")
-  [[ -n ${UMU_PREFIX:-} ]] && prefixes+=("$UMU_PREFIX")
-  [[ -n ${LUTRIS_PREFIX:-} ]] && prefixes+=("$LUTRIS_PREFIX")
-  [[ -n ${RSI_LAUNCHER_PREFIX:-} ]] && prefixes+=("$RSI_LAUNCHER_PREFIX")
-  prefixes+=(
-    "$HOME/Games/rsi-launcher"
-    "$HOME/Games/nix-citizen"
-    "$HOME/Games/star-citizen"
-    "$HOME/.wine"
-    "$HOME/.local/share/lug-helper/rsi-launcher"
-  )
+	[[ -n ${WINEPREFIX:-} ]] && prefixes+=("$WINEPREFIX")
+	[[ -n ${STEAM_COMPAT_DATA_PATH:-} ]] && prefixes+=("$STEAM_COMPAT_DATA_PATH/pfx")
+	[[ -n ${UMU_PREFIX:-} ]] && prefixes+=("$UMU_PREFIX")
+	[[ -n ${LUTRIS_PREFIX:-} ]] && prefixes+=("$LUTRIS_PREFIX")
+	[[ -n ${RSI_LAUNCHER_PREFIX:-} ]] && prefixes+=("$RSI_LAUNCHER_PREFIX")
+	prefixes+=(
+		"$HOME/Games/rsi-launcher"
+		"$HOME/Games/nix-citizen"
+		"$HOME/Games/star-citizen"
+		"$HOME/.wine"
+		"$HOME/.local/share/lug-helper/rsi-launcher"
+	)
 fi
 
 for prefix in "${prefixes[@]}"; do
-  [[ $prefix == /* ]] || { printf 'Ignoring non-absolute prefix: %s\n' "$prefix" >&2; continue; }
-  game_roots+=(
-    "$prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen"
-    "$prefix/pfx/drive_c/Program Files/Roberts Space Industries/StarCitizen"
-  )
+	[[ $prefix == /* ]] || {
+		printf 'Ignoring non-absolute prefix: %s\n' "$prefix" >&2
+		continue
+	}
+	game_roots+=(
+		"$prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen"
+		"$prefix/pfx/drive_c/Program Files/Roberts Space Industries/StarCitizen"
+	)
 done
 
 if ((dry_run)); then
-  printf 'DRY-RUN: bounded candidate paths:\n'
-  printf '  %s\n' "${game_roots[@]}"
-  exit 0
+	printf 'DRY-RUN: bounded candidate paths:\n'
+	printf '  %s\n' "${game_roots[@]}"
+	exit 0
 fi
 
 declare -A seen=()
 found=0
 for game_root in "${game_roots[@]}"; do
-  [[ $game_root == /* && -d $game_root && ! -L $game_root ]] || continue
-  canonical=$(realpath -- "$game_root")
-  [[ -z ${seen[$canonical]:-} ]] || continue
-  seen[$canonical]=1
-  ((found += 1))
-  printf 'GAME_ROOT=%s\n' "$canonical"
+	[[ $game_root == /* && -d $game_root && ! -L $game_root ]] || continue
+	canonical=$(realpath -- "$game_root")
+	[[ -z ${seen[$canonical]:-} ]] || continue
+	seen[$canonical]=1
+	((found += 1))
+	printf 'GAME_ROOT=%s\n' "$canonical"
 
-  for channel in LIVE PTU EPTU HOTFIX TECH-PREVIEW; do
-    mappings=$canonical/$channel/user/client/0/controls/mappings
-    [[ -d $mappings && ! -L $mappings ]] || continue
-    printf 'MAPPINGS_DIR=%s\n' "$(realpath -- "$mappings")"
-  done
+	for channel in LIVE PTU EPTU HOTFIX TECH-PREVIEW; do
+		mappings=$canonical/$channel/user/client/0/controls/mappings
+		[[ -d $mappings && ! -L $mappings ]] || continue
+		printf 'MAPPINGS_DIR=%s\n' "$(realpath -- "$mappings")"
+	done
 done
 
 ((found > 0)) || exit 3
