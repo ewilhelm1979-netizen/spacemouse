@@ -24,13 +24,52 @@ expected_rule='SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="256f", 
 [[ $(<"$repo/udev/60-spacemouse-hidraw.rules") == "$expected_rule" ]] || fail 'scoped udev rule'
 pass 'scoped udev rule is exact'
 
-for script in "$repo"/scripts/*; do
+mapfile -d '' executable_scripts < <(find "$repo/scripts" -maxdepth 1 -type f -print0)
+for script in "${executable_scripts[@]}"; do
 	[[ -x $script ]] || fail "not executable: $script"
 	"$script" --help >/dev/null
 done
 "$repo/scripts/spacemouse-detect" --dry-run >/dev/null
 "$repo/scripts/spacemouse-verify-access" --dry-run >/dev/null
 pass 'help and hardware dry-run paths'
+
+fake_dev=$tmp/dev
+wrong_dev=$tmp/dev-wrong-product
+missing_dev=$tmp/dev-missing-ancestor
+fake_sys=$tmp/sys
+mkdir -p \
+	"$fake_dev/input" \
+	"$wrong_dev" \
+	"$missing_dev" \
+	"$fake_sys/devices/pci0000:00/usb1/1-1/1-1:1.0/hidraw/hidraw0" \
+	"$fake_sys/devices/pci0000:00/usb1/1-1/1-1:1.0/input/input0/event0" \
+	"$fake_sys/devices/pci0000:00/usb1/1-1/1-1:1.0/input/input0/js0" \
+	"$fake_sys/devices/pci0000:00/usb1/1-1/1-1:1.1/hidraw/hidraw3" \
+	"$fake_sys/devices/pci0000:00/usb1/1-2/1-2:1.0/hidraw/hidraw1" \
+	"$fake_sys/devices/platform/no-usb/hidraw/hidraw2"
+printf '256F\n' >"$fake_sys/devices/pci0000:00/usb1/1-1/idVendor"
+printf 'C63A\n' >"$fake_sys/devices/pci0000:00/usb1/1-1/idProduct"
+printf '256f\n' >"$fake_sys/devices/pci0000:00/usb1/1-2/idVendor"
+printf 'dead\n' >"$fake_sys/devices/pci0000:00/usb1/1-2/idProduct"
+touch "$fake_dev/hidraw0" "$fake_dev/input/event0" "$fake_dev/input/js0"
+touch "$wrong_dev/hidraw1" "$missing_dev/hidraw2"
+test_path=$repo/tests/fixtures:$PATH
+fixture_properties=$(PATH=$test_path udevadm info --query=property --name "$fake_dev/hidraw0")
+if grep -Eq '^ID_(VENDOR|MODEL)_ID=' <<<"$fixture_properties"; then
+	fail 'udev fixture unexpectedly exposes USB ID properties'
+fi
+detect_output=$(PATH=$test_path "$repo/scripts/spacemouse-detect" --dev-root "$fake_dev" --sys-root "$fake_sys")
+grep -qx 'MATCHING_NODES=3' <<<"$detect_output" || fail 'USB ancestor detect count'
+grep -qx 'MATCHING_HIDRAW_NODES=1' <<<"$detect_output" || fail 'USB ancestor hidraw count'
+verify_output=$(PATH=$test_path "$repo/scripts/spacemouse-verify-access" --dev-root "$fake_dev" --sys-root "$fake_sys")
+grep -qx 'CURRENT_USER_RW=YES' <<<"$verify_output" || fail 'USB ancestor access verification'
+expect_failure env PATH="$test_path" "$repo/scripts/spacemouse-detect" --dev-root "$wrong_dev" --sys-root "$fake_sys"
+expect_failure env PATH="$test_path" "$repo/scripts/spacemouse-verify-access" --dev-root "$wrong_dev" --sys-root "$fake_sys"
+expect_failure env PATH="$test_path" "$repo/scripts/spacemouse-detect" --dev-root "$missing_dev" --sys-root "$fake_sys"
+expect_failure env PATH="$test_path" "$repo/scripts/spacemouse-verify-access" --dev-root "$missing_dev" --sys-root "$fake_sys"
+touch "$fake_dev/hidraw3"
+expect_failure env PATH="$test_path" "$repo/scripts/spacemouse-verify-access" --dev-root "$fake_dev" --sys-root "$fake_sys"
+pass 'bounded USB ancestor detection without USB ID properties'
 
 root=$tmp/root
 mkdir -p "$root"
@@ -92,15 +131,19 @@ grep -q '^MAPPINGS_DIR=' <<<"$finder_output" || fail 'bounded mappings finder'
 "$repo/scripts/star-citizen-find-installation" --prefix "$prefix" --dry-run >/dev/null
 pass 'bounded installation finder'
 
+mapfile -d '' shell_sources < <(find "$repo/scripts" "$repo/tests" -type f -print0)
+bash -n "${shell_sources[@]}"
+pass 'Bash syntax'
+
 if command -v shellcheck >/dev/null; then
-	shellcheck "$repo"/scripts/* "$repo/tests/run.sh"
+	shellcheck -x "${shell_sources[@]}"
 	pass 'shellcheck'
 else
 	printf 'SKIP: shellcheck not installed\n'
 fi
 
 if command -v shfmt >/dev/null; then
-	shfmt -d "$repo"/scripts/* "$repo/tests/run.sh"
+	shfmt -d "${shell_sources[@]}"
 	pass 'shfmt check'
 else
 	printf 'SKIP: shfmt not installed\n'
@@ -135,6 +178,13 @@ read -r actual_profile_hash _ < <(sha256sum "$expected_profile")
 if rg -l 'MODE="0666"|setfacl|GROUP=' "$repo/udev" "$repo/modules" "$repo/scripts" | grep -q .; then
 	fail 'unsafe permission mechanism found'
 fi
-pass 'privacy, tested-profile, retired-model, and unsafe-permission scans'
+if rg -n -- '--profile[[:space:]]+(\./)?profiles/' "$repo/README.md" "$repo/docs" "$repo/profiles" >/dev/null; then
+	fail 'relative documented profile path found'
+fi
+for doc in "$repo/README.md" "$repo/docs/star-citizen.md" "$repo/profiles/star-citizen/README.md"; do
+	rg -F -- '--profile "$PWD/profiles/star-citizen/layout_spacemouse_linux_usb_v1_exported.xml' "$doc" >/dev/null ||
+		fail "absolute profile example missing: $doc"
+done
+pass 'privacy, tested-profile, documentation, retired-model, and unsafe-permission scans'
 
 printf 'ALL_TESTS_PASSED=YES\n'
