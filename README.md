@@ -9,6 +9,12 @@ SpaceMouse with Star Citizen on Linux. It does not require `spacenavd`,
 `uinput`, a proprietary driver, registry changes, or world-writable HIDRAW
 devices.
 
+## AI-assisted development
+
+This project was developed with substantial assistance from OpenAI Codex.
+The human maintainer remains responsible for architecture, implementation
+review, security decisions, testing, licensing, provenance, and releases.
+
 ## Tested reference
 
 - 3Dconnexion SpaceMouse Wireless BT over USB (`256f:c63a`)

@@ -185,6 +185,86 @@ for doc in "$repo/README.md" "$repo/docs/star-citizen.md" "$repo/profiles/star-c
 	rg -F -- '--profile "$PWD/profiles/star-citizen/layout_spacemouse_linux_usb_v1_exported.xml' "$doc" >/dev/null ||
 		fail "absolute profile example missing: $doc"
 done
+
+read_markdown_section() {
+	local file=$1
+	local heading=$2
+	local line
+	local in_section=0
+	local found=0
+
+	while IFS= read -r line; do
+		if ((in_section)) && [[ $line == '## '* ]]; then
+			break
+		fi
+		if [[ $line == "$heading" ]]; then
+			in_section=1
+			found=1
+		fi
+		if ((in_section)); then
+			printf '%s\n' "$line"
+		fi
+	done <"$file"
+
+	((found))
+}
+
+markdown_heading_is_visible() {
+	local file=$1
+	local heading=$2
+	local line
+	local lower
+	local in_comment=0
+	local in_details=0
+	local found=0
+
+	while IFS= read -r line; do
+		lower=${line,,}
+		[[ $lower == *'<!--'* ]] && in_comment=1
+		[[ $lower == *'<details'* ]] && in_details=1
+		if [[ $line == "$heading" ]]; then
+			((in_comment == 0 && in_details == 0)) || return 1
+			found=1
+		fi
+		[[ $lower == *'-->'* ]] && in_comment=0
+		[[ $lower == *'</details>'* ]] && in_details=0
+	done <"$file"
+
+	((found))
+}
+
+readme=$repo/README.md
+contributing=$repo/CONTRIBUTING.md
+disclosure_heading='## AI-assisted development'
+expected_disclosure=$(printf '%s\n' \
+	"$disclosure_heading" \
+	'' \
+	'This project was developed with substantial assistance from OpenAI Codex.' \
+	'The human maintainer remains responsible for architecture, implementation' \
+	'review, security decisions, testing, licensing, provenance, and releases.')
+[[ $(grep -Fxc "$disclosure_heading" "$readme") -eq 1 ]] || fail 'AI disclosure heading'
+if ! disclosure=$(read_markdown_section "$readme" "$disclosure_heading"); then
+	fail 'AI disclosure section missing'
+fi
+[[ $disclosure == "$expected_disclosure" ]] || fail 'AI disclosure wording changed'
+markdown_heading_is_visible "$readme" "$disclosure_heading" || fail 'AI disclosure is hidden'
+[[ $disclosure == *'OpenAI Codex'* ]] || fail 'OpenAI Codex disclosure'
+[[ $disclosure == *'The human maintainer remains responsible'* ]] || fail 'human maintainer responsibility'
+for responsibility in architecture security testing licensing provenance releases; do
+	[[ $disclosure == *"$responsibility"* ]] || fail "missing disclosure responsibility: $responsibility"
+done
+pass 'visible AI assistance disclosure and human responsibility policy'
+
+[[ -f $contributing ]] || fail 'CONTRIBUTING.md missing'
+grep -Fq 'English is the mandatory language for all public repository content.' "$contributing" ||
+	fail 'mandatory English repository policy'
+grep -Fq 'Substantial AI assistance must be' "$contributing" || fail 'substantial AI disclosure policy'
+grep -Fq 'disclosed in the contribution, issue, or pull request.' "$contributing" ||
+	fail 'AI disclosure destination policy'
+grep -Fq 'The human contributor or maintainer remains responsible for correctness,' "$contributing" ||
+	fail 'human contribution responsibility policy'
+pass 'English repository language and contribution responsibility policy'
+
 pass 'privacy, tested-profile, documentation, retired-model, and unsafe-permission scans'
 
 printf 'ALL_TESTS_PASSED=YES\n'
