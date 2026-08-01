@@ -207,7 +207,7 @@ The profile hash remains
 The added workflow has minimal permissions, no `pull_request_target`, no
 self-hosted runner, no artifact upload, no mutable download, no untrusted
 context in shell, and disables checkout credential persistence. The pinned
-`actions/checkout` SHA corresponds to upstream tag `v4.3.0`; the pinned
+`actions/checkout` SHA corresponds to upstream tag `v5.1.0`; the pinned
 `cachix/install-nix-action` SHA corresponds to upstream tag `v31`. Actionlint
 and offline pedantic zizmor report no finding. CI runs the same core
 `nix flake check --no-write-lock-file` matrix used locally.
