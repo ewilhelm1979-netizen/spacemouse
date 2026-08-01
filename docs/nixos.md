@@ -5,7 +5,9 @@ Import `nixosModules.default` from the flake and set
 tested USB pair `256f:c63a`.
 
 Set `hardware.spacemouse.diagnosticTools = true` only when the optional USB,
-evdev, and joystick tools are wanted. The module installs a udev package named
+evdev, joystick, and repository diagnostic tools are wanted. This makes both
+`spacemouse-detect` and `spacemouse-verify-access` available in `PATH`, alongside
+`lsusb`, `evtest`, and `jstest-gtk`. The module installs a udev package named
 `60-spacemouse-hidraw.rules`; it does not install or start a daemon.
 
 After rebuilding, log out and back in or reboot so the active graphical session

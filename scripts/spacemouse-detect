@@ -4,17 +4,29 @@ set -Eeuo pipefail
 usage() {
 	cat <<'EOF'
 Usage: spacemouse-detect [--vendor HEX] [--product HEX] [--dry-run]
+                         [--dev-root ABS --sys-root ABS]
 
-Find matching hidraw, event, and joystick nodes using udev properties.
+Find matching hidraw, event, and joystick nodes using bounded USB ancestors.
 Defaults: --vendor 256f --product c63a
+
+The root overrides are a read-only test seam and must be supplied together.
 
 Exit codes: 0 found, 2 invalid arguments, 3 not found, 4 dependency missing.
 EOF
 }
 
+script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/spacemouse-device.sh
+source "$script_dir/lib/spacemouse-device.sh"
+
 vendor=256f
 product=c63a
 dry_run=0
+dev_root=/dev
+sys_root=/sys
+dev_root_set=0
+sys_root_set=0
 
 while (($#)); do
 	case "$1" in
@@ -38,6 +50,24 @@ while (($#)); do
 		dry_run=1
 		shift
 		;;
+	--dev-root)
+		(($# >= 2)) || {
+			printf 'Missing value for --dev-root\n' >&2
+			exit 2
+		}
+		dev_root=$2
+		dev_root_set=1
+		shift 2
+		;;
+	--sys-root)
+		(($# >= 2)) || {
+			printf 'Missing value for --sys-root\n' >&2
+			exit 2
+		}
+		sys_root=$2
+		sys_root_set=1
+		shift 2
+		;;
 	-h | --help)
 		usage
 		exit 0
@@ -55,8 +85,22 @@ done
 	exit 2
 }
 
+((dev_root_set == sys_root_set)) || {
+	printf -- '--dev-root and --sys-root must be supplied together.\n' >&2
+	exit 2
+}
+dev_root=$(spacemouse_canonical_root "$dev_root") || {
+	printf 'Unsafe device root: %s\n' "$dev_root" >&2
+	exit 2
+}
+sys_root=$(spacemouse_canonical_root "$sys_root") || {
+	printf 'Unsafe sysfs root: %s\n' "$sys_root" >&2
+	exit 2
+}
+
 if ((dry_run)); then
-	printf 'DRY-RUN: would inspect /dev/hidraw* and /dev/input/{event*,js*} for %s:%s\n' "$vendor" "$product"
+	printf 'DRY-RUN: would inspect %s/hidraw* and %s/input/{event*,js*} for USB ancestor %s:%s under %s\n' \
+		"$dev_root" "$dev_root" "$vendor" "$product" "$sys_root"
 	exit 0
 fi
 
@@ -68,13 +112,13 @@ shopt -s nullglob
 
 matches=0
 hidraw_matches=0
-for node in /dev/hidraw* /dev/input/event* /dev/input/js*; do
+for node in "$dev_root"/hidraw* "$dev_root"/input/event* "$dev_root"/input/js*; do
+	spacemouse_node_is_safe "$node" "$dev_root" || continue
+	spacemouse_usb_ancestor_matches "$node" "$vendor" "$product" "$sys_root" || continue
 	properties=$(udevadm info --query=property --name "$node" 2>/dev/null || true)
-	grep -qx "ID_VENDOR_ID=$vendor" <<<"$properties" || continue
-	grep -qx "ID_MODEL_ID=$product" <<<"$properties" || continue
 
 	((matches += 1))
-	[[ $node == /dev/hidraw* ]] && ((hidraw_matches += 1))
+	[[ $node == "$dev_root"/hidraw* ]] && ((hidraw_matches += 1))
 	printf 'NODE=%s\n' "$node"
 	stat -c 'MODE=%a OWNER=%U:%G' "$node"
 	grep -E '^(ID_BUS|ID_VENDOR|ID_MODEL|ID_VENDOR_ID|ID_MODEL_ID|ID_PATH|TAGS|CURRENT_TAGS)=' <<<"$properties" || true

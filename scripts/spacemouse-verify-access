@@ -5,19 +5,31 @@ usage() {
 	cat <<'EOF'
 Usage: spacemouse-verify-access [--device /dev/hidrawN]
                                 [--vendor HEX --product HEX] [--dry-run]
+                                [--dev-root ABS --sys-root ABS]
 
 Verify current-user read/write access to an explicit or dynamically detected
 SpaceMouse HIDRAW node.
+
+The root overrides are a read-only test seam and must be supplied together.
 
 Exit codes: 0 accessible, 2 invalid arguments, 3 not found, 4 dependency
 missing, 5 insufficient access.
 EOF
 }
 
+script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/spacemouse-device.sh
+source "$script_dir/lib/spacemouse-device.sh"
+
 device=
 vendor=256f
 product=c63a
 dry_run=0
+dev_root=/dev
+sys_root=/sys
+dev_root_set=0
+sys_root_set=0
 
 while (($#)); do
 	case "$1" in
@@ -49,6 +61,24 @@ while (($#)); do
 		dry_run=1
 		shift
 		;;
+	--dev-root)
+		(($# >= 2)) || {
+			printf 'Missing value for --dev-root\n' >&2
+			exit 2
+		}
+		dev_root=$2
+		dev_root_set=1
+		shift 2
+		;;
+	--sys-root)
+		(($# >= 2)) || {
+			printf 'Missing value for --sys-root\n' >&2
+			exit 2
+		}
+		sys_root=$2
+		sys_root_set=1
+		shift 2
+		;;
 	-h | --help)
 		usage
 		exit 0
@@ -61,6 +91,18 @@ while (($#)); do
 done
 
 [[ $vendor =~ ^[0-9a-f]{4}$ && $product =~ ^[0-9a-f]{4}$ ]] || exit 2
+((dev_root_set == sys_root_set)) || {
+	printf -- '--dev-root and --sys-root must be supplied together.\n' >&2
+	exit 2
+}
+dev_root=$(spacemouse_canonical_root "$dev_root") || {
+	printf 'Unsafe device root: %s\n' "$dev_root" >&2
+	exit 2
+}
+sys_root=$(spacemouse_canonical_root "$sys_root") || {
+	printf 'Unsafe sysfs root: %s\n' "$sys_root" >&2
+	exit 2
+}
 
 if ((dry_run)); then
 	if [[ -n $device ]]; then
@@ -71,17 +113,17 @@ if ((dry_run)); then
 	exit 0
 fi
 
+command -v udevadm >/dev/null || {
+	printf 'udevadm is required.\n' >&2
+	exit 4
+}
+
 if [[ -z $device ]]; then
-	command -v udevadm >/dev/null || {
-		printf 'udevadm is required.\n' >&2
-		exit 4
-	}
 	shopt -s nullglob
 	devices=()
-	for candidate in /dev/hidraw*; do
-		properties=$(udevadm info --query=property --name "$candidate" 2>/dev/null || true)
-		grep -qx "ID_VENDOR_ID=$vendor" <<<"$properties" || continue
-		grep -qx "ID_MODEL_ID=$product" <<<"$properties" || continue
+	for candidate in "$dev_root"/hidraw*; do
+		spacemouse_node_is_safe "$candidate" "$dev_root" || continue
+		spacemouse_usb_ancestor_matches "$candidate" "$vendor" "$product" "$sys_root" || continue
 		devices+=("$candidate")
 	done
 	((${#devices[@]} == 1)) || {
@@ -91,8 +133,14 @@ if [[ -z $device ]]; then
 	device=${devices[0]}
 fi
 
-[[ $device =~ ^/dev/hidraw[0-9]+$ && -c $device ]] || {
+device_name=${device#"$dev_root"/}
+if [[ $device != "$dev_root"/* || ! $device_name =~ ^hidraw[0-9]+$ ]] ||
+	! spacemouse_node_is_safe "$device" "$dev_root"; then
 	printf 'Not a valid HIDRAW character device: %s\n' "$device" >&2
+	exit 3
+fi
+spacemouse_usb_ancestor_matches "$device" "$vendor" "$product" "$sys_root" || {
+	printf 'No matching USB ancestor for %s.\n' "$device" >&2
 	exit 3
 }
 

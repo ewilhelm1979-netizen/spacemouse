@@ -27,7 +27,7 @@ Preview the explicit target first:
 
 ```console
 scripts/star-citizen-install-profile \
-  --profile profiles/star-citizen/layout_spacemouse_linux_usb_v1_exported.xml \
+  --profile "$PWD/profiles/star-citizen/layout_spacemouse_linux_usb_v1_exported.xml" \
   --mappings-dir /explicit/path/to/controls/mappings \
   --dry-run
 ```

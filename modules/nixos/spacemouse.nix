@@ -30,6 +30,30 @@ let
     destination = "/lib/udev/rules.d/60-spacemouse-hidraw.rules";
     text = lib.concatMapStringsSep "\n" ruleFor cfg.devices + "\n";
   };
+
+  scriptsSource = ../../scripts;
+
+  diagnosticRuntimeInputs = [
+    pkgs.bash
+    pkgs.coreutils
+    pkgs.systemd
+  ];
+
+  spacemouseDetect = pkgs.writeShellApplication {
+    name = "spacemouse-detect";
+    runtimeInputs = diagnosticRuntimeInputs ++ [ pkgs.gnugrep ];
+    text = ''
+      exec bash ${scriptsSource}/spacemouse-detect "$@"
+    '';
+  };
+
+  spacemouseVerifyAccess = pkgs.writeShellApplication {
+    name = "spacemouse-verify-access";
+    runtimeInputs = diagnosticRuntimeInputs ++ [ pkgs.acl ];
+    text = ''
+      exec bash ${scriptsSource}/spacemouse-verify-access "$@"
+    '';
+  };
 in
 {
   options.hardware.spacemouse = {
@@ -53,7 +77,7 @@ in
     diagnosticTools = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Install optional USB, evdev, and joystick diagnostics.";
+      description = "Install optional USB, evdev, joystick, and SpaceMouse diagnostics.";
     };
   };
 
@@ -71,6 +95,8 @@ in
       pkgs.evtest
       pkgs.jstest-gtk
       pkgs.usbutils
+      spacemouseDetect
+      spacemouseVerifyAccess
     ];
   };
 }

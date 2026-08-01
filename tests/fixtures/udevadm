@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+[[ ${1:-} == info ]] || exit 2
+shift
+
+query=
+node=
+while (($#)); do
+	case $1 in
+	--query=*)
+		query=${1#*=}
+		shift
+		;;
+	--query)
+		(($# >= 2)) || exit 2
+		query=$2
+		shift 2
+		;;
+	--name=*)
+		node=${1#*=}
+		shift
+		;;
+	--name)
+		(($# >= 2)) || exit 2
+		node=$2
+		shift 2
+		;;
+	*)
+		exit 2
+		;;
+	esac
+done
+
+[[ -n $query && -n $node ]] || exit 2
+node_name=${node##*/}
+
+if [[ $query == property ]]; then
+	printf '%s\n' 'ID_BUS=usb' 'ID_MODEL=SpaceMouse_Test_Fixture'
+	exit 0
+fi
+
+[[ $query == path ]] || exit 2
+case $node_name in
+hidraw0)
+	printf '/devices/pci0000:00/usb1/1-1/1-1:1.0/hidraw/hidraw0\n'
+	;;
+event0)
+	printf '/devices/pci0000:00/usb1/1-1/1-1:1.0/input/input0/event0\n'
+	;;
+js0)
+	printf '/devices/pci0000:00/usb1/1-1/1-1:1.0/input/input0/js0\n'
+	;;
+hidraw1)
+	printf '/devices/pci0000:00/usb1/1-2/1-2:1.0/hidraw/hidraw1\n'
+	;;
+hidraw2)
+	printf '/devices/platform/no-usb/hidraw/hidraw2\n'
+	;;
+hidraw3)
+	printf '/devices/pci0000:00/usb1/1-1/1-1:1.1/hidraw/hidraw3\n'
+	;;
+*)
+	exit 3
+	;;
+esac
