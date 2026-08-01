@@ -136,6 +136,30 @@ The profile imports as `spacemouse_linux_usb_v1`; see its
 - [Troubleshooting](docs/troubleshooting.md)
 - [Support matrix](docs/support-matrix.md)
 
+## Acknowledgements
+
+The original idea to try a SpaceMouse with Star Citizen came from
+[Nerdorbit](https://www.youtube.com/@nerdorbitlp) and his
+[SpaceMouse demonstration](https://www.youtube.com/watch?v=aBZHOwq837k).
+
+The video shows how smoothly a compact SpaceMouse can control movement with
+six degrees of freedom (6DoF): three translations—left and right along the X
+axis, forward and backward along the Y axis, and up and down along the Z
+axis—and three rotations: pitch, yaw, and roll.
+
+A SpaceMouse provides all six movement dimensions from one compact device
+while using relatively little desk space. Thank you to Nerdorbit for sharing
+the idea and demonstration that started this experiment.
+
+- [Nerdorbit Discord community](https://discord.gg/fkF3buGnA)
+- [Nerdorbit YouTube channel](https://www.youtube.com/@nerdorbitlp)
+- [SpaceMouse demonstration video](https://www.youtube.com/watch?v=aBZHOwq837k)
+
+The implementation, NixOS integration, security design, tests, documentation,
+and repository maintenance were completed independently. This acknowledgement
+does not imply review, endorsement, affiliation, or responsibility for the
+implementation.
+
 ## Development
 
 ```console

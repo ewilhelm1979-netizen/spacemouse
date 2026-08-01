@@ -16,6 +16,29 @@ The documented reference environment used NixOS 26.05 with
 `wine-astral` 11.12 package supplied through that project. The implementation
 in this repository remains an independent, SpaceMouse-specific integration.
 
+## Inspiration and community
+
+The idea to test this control method in Star Citizen was inspired by
+[Nerdorbit's SpaceMouse demonstration](https://www.youtube.com/watch?v=aBZHOwq837k).
+
+A SpaceMouse provides six degrees of freedom (6DoF) in one compact controller:
+translation along the X axis for left and right movement, the Y axis for
+forward and backward movement, and the Z axis for up and down movement,
+together with pitch, yaw, and roll. This puts all six movement dimensions in
+one compact device without requiring a large desktop controller setup.
+
+Community references:
+
+- [Nerdorbit Discord community](https://discord.gg/fkF3buGnA)
+- [Nerdorbit YouTube channel](https://www.youtube.com/@nerdorbitlp)
+- [SpaceMouse demonstration video](https://www.youtube.com/watch?v=aBZHOwq837k)
+
+The repository implementation and its technical validation were performed
+independently. The linked demonstration is an inspiration reference rather
+than evidence for the repository's tested claims. The existing audit, profile,
+and hardware-validation documentation remains the authoritative technical
+evidence.
+
 ## Native Linux detection
 
 The Linux kernel and input stack associate the hardware with HIDRAW, event,

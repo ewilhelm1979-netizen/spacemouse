@@ -545,6 +545,88 @@ if rg -n -i \
 fi
 pass 'ecosystem attribution, HTTPS links, independence, and no-endorsement policy'
 
+nerdorbit_channel_url=https://www.youtube.com/@nerdorbitlp
+nerdorbit_video_url='https://www.youtube.com/watch?v=aBZHOwq837k'
+nerdorbit_discord_url=https://discord.gg/fkF3buGnA
+acknowledgement_readme=$repo/README.md
+hardware_guide=$repo/docs/hardware-and-detection.md
+rg -Fx '## Acknowledgements' "$acknowledgement_readme" >/dev/null || fail 'README acknowledgement heading'
+rg -F 'Nerdorbit' "$acknowledgement_readme" >/dev/null || fail 'README Nerdorbit credit'
+rg -Fx '## Inspiration and community' "$hardware_guide" >/dev/null ||
+	fail 'hardware guide inspiration heading'
+for public_reference in "$nerdorbit_channel_url" "$nerdorbit_video_url" "$nerdorbit_discord_url"; do
+	rg -F "$public_reference" "$acknowledgement_readme" >/dev/null ||
+		fail "README missing approved community reference: $public_reference"
+	rg -F "$public_reference" "$hardware_guide" >/dev/null ||
+		fail "hardware guide missing approved community reference: $public_reference"
+done
+for document in "$acknowledgement_readme" "$hardware_guide"; do
+	rg -F 'six degrees of freedom (6DoF)' "$document" >/dev/null ||
+		fail "6DoF explanation missing: $document"
+	for translation in 'left and right' 'forward and backward' 'up and down'; do
+		rg -F "$translation" "$document" >/dev/null ||
+			fail "6DoF translation missing from $document: $translation"
+	done
+	for rotation in pitch yaw roll; do
+		rg -F "$rotation" "$document" >/dev/null ||
+			fail "6DoF rotation missing from $document: $rotation"
+	done
+done
+rg -F 'idea to try a SpaceMouse with Star Citizen came from' "$acknowledgement_readme" >/dev/null ||
+	fail 'README inspiration statement'
+rg -F 'idea to test this control method in Star Citizen was inspired by' "$hardware_guide" >/dev/null ||
+	fail 'hardware guide inspiration statement'
+rg -F 'repository maintenance were completed independently' "$acknowledgement_readme" >/dev/null ||
+	fail 'README independent implementation statement'
+rg -F 'does not imply review, endorsement, affiliation, or' "$acknowledgement_readme" >/dev/null ||
+	fail 'README no-endorsement statement'
+rg -F 'inspiration reference rather' "$hardware_guide" >/dev/null ||
+	fail 'hardware guide inspiration-reference distinction'
+rg -F 'than evidence for the repository' "$hardware_guide" >/dev/null ||
+	fail 'hardware guide technical-evidence distinction'
+
+mapfile -t discord_urls < <(
+	rg --no-filename -o 'https://[A-Za-z0-9./_?=&@:-]+' "$acknowledgement_readme" "$hardware_guide" |
+		rg -i '^https://(www\.)?discord' | sort -u
+)
+[[ ${#discord_urls[@]} -eq 1 && ${discord_urls[0]} == "$nerdorbit_discord_url" ]] ||
+	fail 'unapproved Discord URL'
+mapfile -t youtube_urls < <(
+	rg --no-filename -o 'https://[A-Za-z0-9./_?=&@:-]+' "$acknowledgement_readme" "$hardware_guide" |
+		rg '^https://www\.youtube\.com/' | sort -u
+)
+[[ ${#youtube_urls[@]} -eq 2 ]] || fail 'unexpected YouTube URL count'
+[[ ${youtube_urls[0]} == "$nerdorbit_channel_url" && ${youtube_urls[1]} == "$nerdorbit_video_url" ]] ||
+	fail 'unapproved or tracked YouTube URL'
+if rg -n -i \
+	'discord(app)?\.com/users/[0-9]+|discord\.gg/[0-9]+|<@!?[0-9]+>' \
+	"$acknowledgement_readme" "$hardware_guide" >/dev/null; then
+	fail 'Discord numeric user ID or user profile reference'
+fi
+if rg -n -i \
+	'developed by Nerdorbit|official Nerdorbit project|endorsed by Nerdorbit|in partnership with Nerdorbit|reviewed by Nerdorbit|maintained by Nerdorbit|implemented by Nerdorbit|tested by Nerdorbit' \
+	"$acknowledgement_readme" "$repo/docs" >/dev/null; then
+	fail 'forbidden Nerdorbit implementation or relationship claim'
+fi
+if rg -n -i '6DoF[^[:cntrl:]]*(guarantees|proves)|force feedback' \
+	"$acknowledgement_readme" "$hardware_guide" >/dev/null; then
+	fail 'unsupported 6DoF capability claim'
+fi
+if rg -n -i 'http://(www\.)?(youtube\.com|discord\.gg|discord\.com)' \
+	"$acknowledgement_readme" "$hardware_guide" >/dev/null; then
+	fail 'non-HTTPS Nerdorbit community link'
+fi
+if rg -n -i '!\[[^]]*\]\(https://[^)]*(youtube|discord)' \
+	"$acknowledgement_readme" "$repo/docs" >/dev/null; then
+	fail 'external Nerdorbit media asset reference'
+fi
+if rg -n -i 'Nerdorbit|aBZHOwq837k|fkF3buGnA|nerdorbitlp' \
+	"$repo/flake.nix" "$repo/flake.lock" "$repo/modules" "$repo/scripts" \
+	"$repo/profiles" "$repo/udev" >/dev/null; then
+	fail 'Nerdorbit reference added outside documentation and tests'
+fi
+pass 'Nerdorbit acknowledgement, 6DoF accuracy, approved links, and independence policy'
+
 expected_udev_hash=a9eb49c848097e9c540050afcd9057dd786741e49f955f899e0ef62a9a6ca879
 read -r actual_udev_hash _ < <(sha256sum "$repo/udev/60-spacemouse-hidraw.rules")
 [[ $actual_udev_hash == "$expected_udev_hash" ]] || fail 'scoped Udev rule checksum'
