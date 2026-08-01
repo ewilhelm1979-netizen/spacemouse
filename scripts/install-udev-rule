@@ -4,7 +4,7 @@ set -Eeuo pipefail
 usage() {
 	cat <<'EOF'
 Usage: install-udev-rule [--root DIR] [--rule-file FILE]
-                         [--dry-run] [--no-reload]
+                         [--restore-backup FILE] [--dry-run] [--no-reload]
 
 Install the scoped SpaceMouse rule atomically. Existing rules are backed up.
 Use --root for an image or test root. Real-system installation requires root.
@@ -14,9 +14,45 @@ Exit codes: 0 success, 2 invalid arguments, 3 unsafe path, 4 invalid rule,
 EOF
 }
 
+udev_transaction_cleanup() {
+	local rc=$1
+	local restore_temp=
+	trap - EXIT INT TERM HUP
+	[[ -z ${temp:-} ]] || rm -f -- "$temp"
+	if [[ ${SPACEMOUSE_TEST_MODE:-0} == 1 && ${SPACEMOUSE_CLEANUP_FAILPOINT:-} == during-cleanup ]]; then
+		printf 'Injected cleanup failure after temporary-file removal; any backup remains recoverable.\n' >&2
+		exit 6
+	fi
+	if ((rc != 0)) && [[ ${published:-0} -eq 1 ]]; then
+		if [[ ${had_target:-0} -eq 1 && -n ${backup:-} && -f $backup ]]; then
+			if [[ ${SPACEMOUSE_TEST_MODE:-0} == 1 && ${SPACEMOUSE_CLEANUP_FAILPOINT:-} == during-rollback ]]; then
+				printf 'Injected rollback failure; original data remains in its unique backup.\n' >&2
+				exit 6
+			fi
+			restore_temp=$(mktemp "$rules_dir/.60-spacemouse-hidraw.rules.restore.XXXXXX") || exit 6
+			cp -p -- "$backup" "$restore_temp" || {
+				rm -f -- "$restore_temp"
+				exit 6
+			}
+			mv -fT -- "$restore_temp" "$target" || {
+				rm -f -- "$restore_temp"
+				exit 6
+			}
+		else
+			rm -f -- "$target"
+		fi
+	fi
+	exit "$rc"
+}
+
 script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/secure-files.sh
+source "$script_dir/lib/secure-files.sh"
 root=/
 rule_file=$script_dir/../udev/60-spacemouse-hidraw.rules
+rule_file_set=0
+restore_backup=
 dry_run=0
 reload=1
 expected='SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="256f", ATTRS{idProduct}=="c63a", TAG+="uaccess"'
@@ -31,6 +67,12 @@ while (($#)); do
 	--rule-file)
 		(($# >= 2)) || exit 2
 		rule_file=$2
+		rule_file_set=1
+		shift 2
+		;;
+	--restore-backup)
+		(($# >= 2)) || exit 2
+		restore_backup=$2
 		shift 2
 		;;
 	--dry-run)
@@ -52,6 +94,13 @@ while (($#)); do
 	esac
 done
 
+[[ -z $restore_backup || $rule_file_set -eq 0 ]] || {
+	printf 'Specify only one of --rule-file and --restore-backup.\n' >&2
+	exit 2
+}
+[[ -z $restore_backup ]] || rule_file=$restore_backup
+
+spacemouse_test_failpoint before-validation || exit 6
 [[ $root == /* && -d $root && ! -L $root ]] || {
 	printf 'Unsafe root: %s\n' "$root" >&2
 	exit 3
@@ -62,11 +111,11 @@ canonical_root=$(realpath -- "$root")
 	exit 3
 }
 root=$canonical_root
-[[ -f $rule_file && ! -L $rule_file ]] || {
-	printf 'Rule must be a regular non-symlink file.\n' >&2
-	exit 4
-}
-rule_file=$(realpath -- "$rule_file")
+if ((rule_file_set)) || [[ -n $restore_backup ]]; then
+	spacemouse_require_canonical_regular_file "$rule_file" 'Rule' || exit 4
+else
+	rule_file=$(realpath -e -- "$rule_file") || exit 4
+fi
 [[ $(<"$rule_file") == "$expected" ]] || {
 	printf 'Rule content is not the approved scoped rule.\n' >&2
 	exit 4
@@ -90,6 +139,8 @@ done
 	printf 'Target is not a regular file.\n' >&2
 	exit 3
 }
+[[ ! -e $target ]] || spacemouse_require_single_link "$target" 'Udev target' || exit 3
+spacemouse_test_failpoint after-validation || exit 6
 
 if ((dry_run)); then
 	printf 'DRY-RUN: would install %s atomically as %s\n' "$rule_file" "$target"
@@ -105,29 +156,43 @@ install -d -m 0755 "$rules_dir"
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup=
+had_target=0
+published=0
 if [[ -e $target ]]; then
+	had_target=1
 	backup=$(mktemp "$target.backup.$timestamp.XXXXXX")
 	cp -p -- "$target" "$backup"
 	printf 'Backup created: %s\n' "$backup"
 fi
+spacemouse_test_failpoint after-backup || exit 6
 
 temp=$(mktemp "$rules_dir/.60-spacemouse-hidraw.rules.tmp.XXXXXX")
-trap 'rm -f -- "${temp:-}"' EXIT
+trap 'udev_transaction_cleanup "$?"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+spacemouse_test_failpoint during-candidate-write || exit 6
 install -m 0644 -- "$rule_file" "$temp"
+spacemouse_test_failpoint before-rename || exit 6
+if ((had_target)); then
+	[[ -f $target && ! -L $target ]] && spacemouse_require_single_link "$target" 'Udev target' || exit 6
+else
+	[[ ! -e $target && ! -L $target ]] || exit 6
+fi
 mv -f -- "$temp" "$target"
 temp=
+published=1
+spacemouse_test_failpoint after-rename || exit 6
 
 if ((reload)) && [[ $root == / ]]; then
 	if ! udevadm control --reload-rules; then
-		if [[ -n $backup ]]; then
-			mv -f -- "$backup" "$target"
-		else
-			rm -f -- "$target"
-		fi
 		printf 'udev reload failed; installation rolled back.\n' >&2
 		exit 6
 	fi
 fi
+
+published=0
+trap - EXIT INT TERM HUP
 
 printf 'Installed: %s\n' "$target"
 printf 'Reconnect the device or restart the session before verification.\n'

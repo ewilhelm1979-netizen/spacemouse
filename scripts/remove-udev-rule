@@ -12,6 +12,11 @@ Exit codes: 0 success/not installed, 2 invalid arguments, 3 unsafe path,
 EOF
 }
 
+script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/secure-files.sh
+source "$script_dir/lib/secure-files.sh"
+
 root=/
 dry_run=0
 reload=1
@@ -75,6 +80,7 @@ fi
 	printf 'Target is not a regular file.\n' >&2
 	exit 3
 }
+spacemouse_require_single_link "$target" 'Udev target' || exit 3
 
 if ((dry_run)); then
 	printf 'DRY-RUN: would back up and remove %s\n' "$target"
@@ -87,12 +93,13 @@ fi
 }
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup=$(mktemp "$target.removed.$timestamp.XXXXXX")
-cp -p -- "$target" "$backup"
-rm -- "$target"
+mv -fT -- "$target" "$backup"
 
 if ((reload)) && [[ $root == / ]]; then
 	if ! udevadm control --reload-rules; then
-		mv -f -- "$backup" "$target"
+		restore_temp=$(mktemp "$rules_dir/.60-spacemouse-hidraw.rules.restore.XXXXXX") || exit 6
+		cp -p -- "$backup" "$restore_temp" || exit 6
+		mv -fT -- "$restore_temp" "$target" || exit 6
 		printf 'udev reload failed; removal rolled back.\n' >&2
 		exit 6
 	fi

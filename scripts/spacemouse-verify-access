@@ -95,6 +95,18 @@ done
 	printf -- '--dev-root and --sys-root must be supplied together.\n' >&2
 	exit 2
 }
+if ((dry_run)); then
+	[[ $dev_root == /* && $sys_root == /* && $dev_root != *'/../'* && $sys_root != *'/../'* ]] || {
+		printf 'Dry-run roots must be absolute and contain no traversal.\n' >&2
+		exit 2
+	}
+	if [[ -n $device ]]; then
+		printf 'DRY-RUN: would verify read/write access to %s\n' "$device"
+	else
+		printf 'DRY-RUN: would locate and verify HIDRAW access for %s:%s\n' "$vendor" "$product"
+	fi
+	exit 0
+fi
 dev_root=$(spacemouse_canonical_root "$dev_root") || {
 	printf 'Unsafe device root: %s\n' "$dev_root" >&2
 	exit 2
@@ -103,15 +115,6 @@ sys_root=$(spacemouse_canonical_root "$sys_root") || {
 	printf 'Unsafe sysfs root: %s\n' "$sys_root" >&2
 	exit 2
 }
-
-if ((dry_run)); then
-	if [[ -n $device ]]; then
-		printf 'DRY-RUN: would verify read/write access to %s\n' "$device"
-	else
-		printf 'DRY-RUN: would locate and verify HIDRAW access for %s:%s\n' "$vendor" "$product"
-	fi
-	exit 0
-fi
 
 command -v udevadm >/dev/null || {
 	printf 'udevadm is required.\n' >&2
@@ -150,7 +153,14 @@ if command -v getfacl >/dev/null; then
 	getfacl -cp "$device"
 fi
 
-if [[ -r $device && -w $device ]]; then
+readable=NO
+writable=NO
+[[ -r $device ]] && readable=YES
+[[ -w $device ]] && writable=YES
+printf 'CURRENT_USER_READ=%s\n' "$readable"
+printf 'CURRENT_USER_WRITE=%s\n' "$writable"
+
+if [[ $readable == YES && $writable == YES ]]; then
 	printf 'CURRENT_USER_RW=YES\n'
 	exit 0
 fi

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.hardware.spacemouse;
@@ -22,7 +27,8 @@ let
     };
   };
 
-  ruleFor = device:
+  ruleFor =
+    device:
     ''SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="${device.vendorId}", ATTRS{idProduct}=="${device.productId}", TAG+="uaccess"'';
 
   spacemouseRules = pkgs.writeTextFile {
@@ -54,6 +60,7 @@ let
       exec bash ${scriptsSource}/spacemouse-verify-access "$@"
     '';
   };
+  devicePairs = map (device: "${device.vendorId}:${device.productId}") cfg.devices;
 in
 {
   options.hardware.spacemouse = {
@@ -87,16 +94,22 @@ in
         assertion = cfg.devices != [ ];
         message = "hardware.spacemouse.devices must contain at least one explicit VID:PID pair.";
       }
+      {
+        assertion = builtins.length devicePairs == builtins.length (lib.unique devicePairs);
+        message = "hardware.spacemouse.devices must not contain duplicate VID:PID pairs.";
+      }
     ];
 
     services.udev.packages = [ spacemouseRules ];
 
-    environment.systemPackages = lib.optionals cfg.diagnosticTools [
+    environment.systemPackages = [
+      spacemouseDetect
+      spacemouseVerifyAccess
+    ]
+    ++ lib.optionals cfg.diagnosticTools [
       pkgs.evtest
       pkgs.jstest-gtk
       pkgs.usbutils
-      spacemouseDetect
-      spacemouseVerifyAccess
     ];
   };
 }

@@ -89,6 +89,15 @@ done
 	printf -- '--dev-root and --sys-root must be supplied together.\n' >&2
 	exit 2
 }
+if ((dry_run)); then
+	[[ $dev_root == /* && $sys_root == /* && $dev_root != *'/../'* && $sys_root != *'/../'* ]] || {
+		printf 'Dry-run roots must be absolute and contain no traversal.\n' >&2
+		exit 2
+	}
+	printf 'DRY-RUN: would inspect %s/hidraw* and %s/input/{event*,js*} for USB ancestor %s:%s under %s\n' \
+		"$dev_root" "$dev_root" "$vendor" "$product" "$sys_root"
+	exit 0
+fi
 dev_root=$(spacemouse_canonical_root "$dev_root") || {
 	printf 'Unsafe device root: %s\n' "$dev_root" >&2
 	exit 2
@@ -97,12 +106,6 @@ sys_root=$(spacemouse_canonical_root "$sys_root") || {
 	printf 'Unsafe sysfs root: %s\n' "$sys_root" >&2
 	exit 2
 }
-
-if ((dry_run)); then
-	printf 'DRY-RUN: would inspect %s/hidraw* and %s/input/{event*,js*} for USB ancestor %s:%s under %s\n' \
-		"$dev_root" "$dev_root" "$vendor" "$product" "$sys_root"
-	exit 0
-fi
 
 command -v udevadm >/dev/null || {
 	printf 'udevadm is required.\n' >&2

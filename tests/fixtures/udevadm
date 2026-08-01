@@ -60,6 +60,11 @@ hidraw2)
 hidraw3)
 	printf '/devices/pci0000:00/usb1/1-1/1-1:1.1/hidraw/hidraw3\n'
 	;;
+hidraw4)
+	path=/devices/pci0000:00/usb1/1-9
+	for depth in $(seq 1 33); do path=$path/level-$depth; done
+	printf '%s/hidraw/hidraw4\n' "$path"
+	;;
 *)
 	exit 3
 	;;

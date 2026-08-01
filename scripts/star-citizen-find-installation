@@ -16,17 +16,37 @@ EOF
 prefixes=()
 game_roots=()
 dry_run=0
+explicit_paths=0
+
+require_canonical_directory() {
+	local value=$1
+	local label=$2
+	local canonical
+	[[ $value == /* && -d $value && ! -L $value && -r $value && -x $value ]] || {
+		printf '%s must be an accessible absolute non-symlink directory: %s\n' "$label" "$value" >&2
+		return 1
+	}
+	canonical=$(realpath -e -- "$value") || return 1
+	[[ $canonical == "$value" ]] || {
+		printf '%s must be canonical and contain no symlink traversal: %s\n' "$label" "$value" >&2
+		return 1
+	}
+}
 
 while (($#)); do
 	case "$1" in
 	--prefix)
 		(($# >= 2)) || exit 2
+		require_canonical_directory "$2" 'Prefix' || exit 2
 		prefixes+=("$2")
+		explicit_paths=1
 		shift 2
 		;;
 	--game-root)
 		(($# >= 2)) || exit 2
+		require_canonical_directory "$2" 'Game root' || exit 2
 		game_roots+=("$2")
+		explicit_paths=1
 		shift 2
 		;;
 	--dry-run)
@@ -50,13 +70,15 @@ if ((${#prefixes[@]} == 0 && ${#game_roots[@]} == 0)); then
 	[[ -n ${UMU_PREFIX:-} ]] && prefixes+=("$UMU_PREFIX")
 	[[ -n ${LUTRIS_PREFIX:-} ]] && prefixes+=("$LUTRIS_PREFIX")
 	[[ -n ${RSI_LAUNCHER_PREFIX:-} ]] && prefixes+=("$RSI_LAUNCHER_PREFIX")
-	prefixes+=(
-		"$HOME/Games/rsi-launcher"
-		"$HOME/Games/nix-citizen"
-		"$HOME/Games/star-citizen"
-		"$HOME/.wine"
-		"$HOME/.local/share/lug-helper/rsi-launcher"
-	)
+	if [[ ${HOME:-} == /* ]]; then
+		prefixes+=(
+			"$HOME/Games/rsi-launcher"
+			"$HOME/Games/nix-citizen"
+			"$HOME/Games/star-citizen"
+			"$HOME/.wine"
+			"$HOME/.local/share/lug-helper/rsi-launcher"
+		)
+	fi
 fi
 
 for prefix in "${prefixes[@]}"; do
@@ -81,6 +103,10 @@ found=0
 for game_root in "${game_roots[@]}"; do
 	[[ $game_root == /* && -d $game_root && ! -L $game_root ]] || continue
 	canonical=$(realpath -- "$game_root")
+	[[ $canonical == "$game_root" ]] || {
+		((explicit_paths == 0)) || printf 'Ignoring noncanonical candidate: %s\n' "$game_root" >&2
+		continue
+	}
 	[[ -z ${seen[$canonical]:-} ]] || continue
 	seen[$canonical]=1
 	((found += 1))
