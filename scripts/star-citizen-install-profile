@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+usage() {
+	cat <<'EOF'
+Usage: star-citizen-install-profile --profile FILE --mappings-dir DIR
+                                    [--name FILE.xml] [--dry-run]
+
+Validate and atomically install an explicit Star Citizen profile. Existing
+targets are backed up first. No installation discovery or registry change is
+performed by this script.
+
+Exit codes: 0 success, 2 invalid arguments, 3 unsafe path, 4 invalid XML,
+5 write failure.
+EOF
+}
+
+profile=
+mappings_dir=
+name=
+dry_run=0
+
+while (($#)); do
+	case "$1" in
+	--profile)
+		(($# >= 2)) || exit 2
+		profile=$2
+		shift 2
+		;;
+	--mappings-dir)
+		(($# >= 2)) || exit 2
+		mappings_dir=$2
+		shift 2
+		;;
+	--name)
+		(($# >= 2)) || exit 2
+		name=$2
+		shift 2
+		;;
+	--dry-run)
+		dry_run=1
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'Unknown argument: %s\n' "$1" >&2
+		exit 2
+		;;
+	esac
+done
+
+[[ -n $profile && -n $mappings_dir ]] || {
+	usage >&2
+	exit 2
+}
+[[ $profile == /* && -f $profile && ! -L $profile ]] || {
+	printf 'Profile must be an absolute regular non-symlink file.\n' >&2
+	exit 3
+}
+[[ $mappings_dir == /* && -d $mappings_dir && ! -L $mappings_dir ]] || {
+	printf 'Mappings directory is unsafe.\n' >&2
+	exit 3
+}
+canonical_profile=$(realpath -- "$profile")
+canonical_mappings=$(realpath -- "$mappings_dir")
+[[ $canonical_profile == "$profile" && $canonical_mappings == "$mappings_dir" ]] || {
+	printf 'Profile and mappings paths must be canonical and contain no symlink traversal.\n' >&2
+	exit 3
+}
+profile=$canonical_profile
+mappings_dir=$canonical_mappings
+
+[[ -n $name ]] || name=$(basename -- "$profile")
+[[ $name =~ ^layout_[A-Za-z0-9._-]+\.xml$ ]] || {
+	printf 'Unsafe profile name: %s\n' "$name" >&2
+	exit 2
+}
+target=$mappings_dir/$name
+[[ ! -L $target ]] || {
+	printf 'Refusing symlink target: %s\n' "$target" >&2
+	exit 3
+}
+[[ ! -e $target || -f $target ]] || {
+	printf 'Target is not a regular file.\n' >&2
+	exit 3
+}
+
+xml_validator=${SPACEMOUSE_XMLLINT:-}
+if [[ -z $xml_validator ]]; then
+	xml_validator=$(command -v xmllint || true)
+fi
+if [[ -x $xml_validator ]]; then
+	"$xml_validator" --noout "$profile" || {
+		printf 'Profile is not well-formed XML.\n' >&2
+		exit 4
+	}
+else
+	printf 'xmllint is required to validate the profile.\n' >&2
+	exit 4
+fi
+
+if ((dry_run)); then
+	printf 'DRY-RUN: would atomically install %s as %s\n' "$profile" "$target"
+	[[ -e $target ]] && printf 'DRY-RUN: would back up the existing profile first\n'
+	exit 0
+fi
+
+timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+if [[ -e $target ]]; then
+	backup=$(mktemp "$target.backup.$timestamp.XXXXXX")
+	cp -p -- "$target" "$backup" || exit 5
+	printf 'Backup created: %s\n' "$backup"
+fi
+
+temp=$(mktemp "$mappings_dir/.$name.tmp.XXXXXX")
+trap 'rm -f -- "${temp:-}"' EXIT
+install -m 0644 -- "$profile" "$temp" || exit 5
+mv -f -- "$temp" "$target" || exit 5
+temp=
+printf 'Installed: %s\n' "$target"
