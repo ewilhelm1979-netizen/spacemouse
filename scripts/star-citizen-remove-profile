@@ -15,6 +15,11 @@ Exit codes: 0 success/not installed, 2 invalid arguments, 3 unsafe path,
 EOF
 }
 
+script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/secure-files.sh
+source "$script_dir/lib/secure-files.sh"
+
 profile=
 mappings_dir=
 name=
@@ -74,6 +79,7 @@ fi
 	printf 'Target is not a regular file.\n' >&2
 	exit 3
 }
+spacemouse_require_single_link "$profile" 'Profile target' || exit 3
 canonical_profile=$(realpath -- "$profile")
 [[ $canonical_profile == "$profile" ]] || {
 	printf 'Profile path must be canonical and contain no symlink traversal.\n' >&2
@@ -88,7 +94,6 @@ fi
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup=$(mktemp "$profile.removed.$timestamp.XXXXXX")
-cp -p -- "$profile" "$backup" || exit 5
-rm -- "$profile" || exit 5
+mv -fT -- "$profile" "$backup" || exit 5
 printf 'Removed: %s\n' "$profile"
 printf 'Backup retained: %s\n' "$backup"

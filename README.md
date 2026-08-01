@@ -1,4 +1,4 @@
-# Universal Linux and NixOS SpaceMouse support
+# SpaceMouse support for Linux and NixOS
 
 Linux/NixOS HIDRAW access and the included Star Citizen v1 profile were
 manually tested with the USB device `256f:c63a` in the reference environment
@@ -47,6 +47,10 @@ unverified. Add another device only after confirming its exact VID:PID pair.
 }
 ```
 
+Enabling the module installs the two read-only discovery/access commands.
+`hardware.spacemouse.diagnosticTools` adds optional USB, evdev, and joystick
+utilities; it is not required for the repository commands.
+
 ### Generic Linux
 
 Preview every change first:
@@ -58,18 +62,26 @@ sudo ./scripts/install-udev-rule --dry-run
 sudo ./scripts/install-udev-rule
 ```
 
+The generic scripts require Bash, GNU core utilities, Udev tools, Python 3,
+libxml2 (`xmllint`), and ACL tools as applicable. The flake package supplies
+these dependencies on supported Nix systems.
+
 Installing the tested profile always requires explicit source and target paths:
 
 ```console
-./scripts/star-citizen-find-installation
-./scripts/star-citizen-install-profile \
+./scripts/star-citizen-find-installation --dry-run
+mappings_dir=$(mktemp -d)
+nix develop --command ./scripts/star-citizen-install-profile \
   --profile "$PWD/profiles/star-citizen/layout_spacemouse_linux_usb_v1_exported.xml" \
-  --mappings-dir /explicit/path/to/controls/mappings \
+  --mappings-dir "$mappings_dir" \
   --dry-run
+rmdir "$mappings_dir"
 ```
 
-Repeat the installation command without `--dry-run` after verifying both
-paths. The profile imports as `spacemouse_linux_usb_v1`; see its
+The temporary directory makes the preview block safe to copy verbatim. For a
+real installation, set `mappings_dir` to the canonical existing mappings
+directory reported and reviewed by the user, then repeat without `--dry-run`.
+The profile imports as `spacemouse_linux_usb_v1`; see its
 [validation and inversion notes](profiles/star-citizen/README.md).
 
 ## Documentation
@@ -87,6 +99,8 @@ paths. The profile imports as `spacemouse_linux_usb_v1`; see its
 ```console
 tests/run.sh
 nix flake check --no-write-lock-file
+nix build .#packages.x86_64-linux.default
+nix run .#default -- --help
 ```
 
 The repository is licensed under GPL-3.0; the existing `LICENSE` file is
